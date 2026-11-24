@@ -1,0 +1,45 @@
+{
+	"$schema": "https://schema.tauri.app/config/2",
+	"productName": "Argaia",
+	"version": "../package.json",
+	"identifier": "io.github.kbiben29hue.argaia",
+	"build": {
+		"beforeDevCommand": "npm run dev -- --port 1420 --strictPort",
+		"devUrl": "http://localhost:1420",
+		"beforeBuildCommand": "npm run build",
+		"frontendDist": "../dist"
+	},
+	"app": {
+		"withGlobalTauri": true,
+		"windows": [
+			{
+				"label": "main",
+				"title": "Argaia",
+				"width": 1440,
+				"height": 900,
+				"minWidth": 960,
+				"minHeight": 600,
+				"backgroundColor": "#0f0c0a"
+			}
+		],
+		"security": {
+			"csp": null
+		}
+	},
+	"bundle": {
+		"active": true,
+		"targets": ["app", "dmg", "nsis"],
+		"category": "CardGame",
+		"shortDescription": "Unofficial table for the card game Ashes",
+		"copyright": "Fan project. Not affiliated with Plaid Hat Games.",
+		"icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.icns", "icons/icon.ico"],
+		"macOS": {
+			"signingIdentity": "-",
+			"minimumSystemVersion": "11.0"
+		},
+		"windows": {
+			"webviewInstallMode": { "type": "downloadBootstrapper" },
+			"nsis": { "installMode": "currentUser" }
+		}
+	}
+}
