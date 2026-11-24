@@ -3,6 +3,7 @@ import { DECKS, DECK_IDS } from '../data/decks'
 import { defOf } from '../engine/engine'
 import type { BotLevel } from '../bot/bot'
 import { CardFace } from './Card'
+import { DieChip } from './Die'
 
 export interface SetupResult {
 	decks: [string, string]
@@ -55,7 +56,12 @@ export function Setup({ onStart, joinCode, canResume, resumeLabel, onResume }: {
 							<CardFace stub={d.pb} name={pb.name} type="Phoenixborn" w={110} />
 							<span className="dc-name">{pb.name}</span>
 							<span className="dc-deck">{d.name}</span>
-							<span className={`dc-magic mg-${d.dice[0].magic}`}>{d.dice[0].magic} dice</span>
+							<span className={`dc-magic mg-${d.dice[0].magic}`}>
+								<DieChip die={{ magic: d.dice[0].magic, level: 'power' }} size={22} />
+								<DieChip die={{ magic: d.dice[0].magic, level: 'class' }} size={22} />
+								<DieChip die={{ magic: d.dice[0].magic, level: 'basic' }} size={22} />
+								{d.dice[0].magic} dice
+							</span>
 						</button>
 					)
 				})}

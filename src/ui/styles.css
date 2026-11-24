@@ -440,56 +440,64 @@ input {
 	justify-content: center;
 	position: relative;
 	border-radius: 22%;
+	border: 2px solid currentColor;
 	flex: none;
-	font-weight: 700;
-	box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.35), 0 1px 3px rgba(0, 0, 0, 0.5);
+	line-height: 1;
+	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.55);
 	transition: transform 0.12s, opacity 0.2s;
+}
+.die .g {
+	display: none;
+	font-family: 'phg-ashes';
+	font-style: normal;
+	font-weight: normal;
+	speak: never;
+}
+.phg .die .g {
+	display: inline;
+}
+.phg .die .fb {
+	display: none;
+}
+.die .fb {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 100%;
+	height: 100%;
+	font-size: 0.8em;
 }
 .die.tap {
 	cursor: pointer;
 }
-.die.mg-astral {
-	background: linear-gradient(160deg, #b8e4ff, #3f86c4);
-	color: #0b2238;
-}
-.die.mg-artifice {
-	background: linear-gradient(160deg, #ffd59b, #b46a26);
-	color: #2a1606;
-}
-.die.mg-natural {
-	background: linear-gradient(160deg, #a7e3a0, #3b8a43);
-	color: #0b220d;
-}
+/* real Ashes dice colours: symbol colour on die colour */
+.die.mg-astral { color: #fcf7cb; background: #685ea9; }
+.die.mg-artifice { color: #77d0e5; background: #4c5257; }
+.die.mg-natural { color: #cedb00; background: #004a98; }
+.die.mg-illusion { color: #8bc7ea; background: #490d67; }
+.die.mg-ceremonial { color: #ee3342; background: #111821; }
+.die.mg-charm { color: #f7e442; background: #f34f98; }
+.die.mg-divine { color: #b58a2b; background: #f2f2f2; }
+.die.mg-sympathy { color: #e3c2af; background: #119981; }
+.die.mg-time { color: #dfdfdf; background: #9a2e36; }
+.die.mg-any { color: #111; background: #fff; }
 .die.lv-power {
-	box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.35), 0 0 0 2px #fff2c4, 0 0 8px rgba(255, 230, 160, 0.8);
-}
-.die.lv-power .ic {
-	font-size: 1.15em;
-	text-shadow: 0 0 4px #fff;
+	box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.5), 0 0 9px rgba(255, 240, 200, 0.55);
 }
 .die .dot {
 	width: 26%;
 	height: 26%;
 	border-radius: 50%;
 	background: currentColor;
-	opacity: 0.8;
-}
-.die em {
-	position: absolute;
-	right: 2px;
-	bottom: 0;
-	font-size: 0.42em;
-	font-style: normal;
-	opacity: 0.75;
 }
 .die.sel {
 	transform: translateY(-4px);
 	outline: 3px solid var(--ember2);
-	outline-offset: 1px;
+	outline-offset: 2px;
 }
 .die.dim {
-	opacity: 0.45;
-	filter: saturate(0.4);
+	opacity: 0.42;
+	filter: saturate(0.35);
 }
 .dice-tray {
 	display: flex;
@@ -1265,4 +1273,32 @@ input {
 }
 .p-coach .coach {
 	gap: 4px;
+}
+
+.cost {
+	display: inline-flex;
+	gap: 4px;
+	align-items: center;
+	vertical-align: middle;
+	flex-wrap: wrap;
+}
+.cost-word {
+	font-size: 0.85em;
+	opacity: 0.9;
+}
+.view-text .die {
+	vertical-align: -3px;
+	margin: 0 1px;
+	border-width: 1px;
+}
+.view-actions button {
+	gap: 2px;
+}
+.dc-magic {
+	display: inline-flex;
+	gap: 5px;
+	align-items: center;
+}
+.dc-magic .die {
+	border-width: 1px;
 }

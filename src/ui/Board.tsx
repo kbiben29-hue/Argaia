@@ -22,11 +22,11 @@ import {
 	spellboardSize,
 } from '../engine/engine'
 import { ABILITIES } from '../engine/effects'
-import { paysExactly, costLabel, type Req } from '../engine/dice'
+import { paysExactly, type Req } from '../engine/dice'
 import { other, LEVELS, type AttackTarget, type GameState, type Intent, type Level, type MeditateItem, type PlayerId, type Question } from '../engine/types'
-import { cardText, readable } from '../data/cardText'
+import { cardText } from '../data/cardText'
 import { Card, CardFace } from './Card'
-import { DieChip } from './Die'
+import { CostView, DieChip, RichText } from './Die'
 import type { Hint } from './coach'
 
 export type LayoutKind = 'console' | 'pocket'
@@ -332,7 +332,7 @@ export function Board(props: BoardProps) {
 		)
 		barText = (
 			<>
-				Pay for <b>{nameOf(s, mode.card)}</b>: {costLabel({ main: false, side: false, exhaust: false, discard: 0, magic: mode.reqs })}. Tap dice to change.
+				Pay for <b>{nameOf(s, mode.card)}</b>: <CostView cost={{ main: false, side: false, exhaust: false, discard: 0, magic: mode.reqs }} size={22} /> — tap dice to change.
 			</>
 		)
 		buttons.push(btn('cancel', 'Cancel', () => setMode(null)))
@@ -536,18 +536,18 @@ function Viewer({ s, uid, me, myAct, startPay, startAttack, hideHand }: { s: Gam
 	const foe = other(me)
 	if (c.zone === 'hand' && c.owner !== me) return null
 	if (c.zone === 'hand' && hideHand) return null
-	const actions: { label: string; why?: string | null; run: () => void; primary?: boolean }[] = []
+	const actions: { key: string; label: ReactNode; why?: string | null; run: () => void; primary?: boolean }[] = []
 	if (c.zone === 'hand' && c.owner === me && d.type !== 'Reaction Spell') {
 		const why = playProblem(s, me, uid) ?? (suggestDice(s, me, playCost(s, uid)) ? null : 'You don’t have the right dice')
-		actions.push({ label: `Play (${costLabel(playCost(s, uid))})`, why: myAct ? why : 'Not your turn', run: () => startPay('play', uid), primary: true })
+		actions.push({ key: 'play', label: <>Play <CostView cost={playCost(s, uid)} /></>, why: myAct ? why : 'Not your turn', run: () => startPay('play', uid), primary: true })
 	}
 	const ab = ABILITIES[c.stub]
 	if (ab && inPlay(s, uid) && controller(s, uid) === me) {
 		const why = abilityProblem(s, me, uid) ?? (suggestDice(s, me, ab.cost) ? null : 'You don’t have the right dice')
-		actions.push({ label: `${ab.label} (${costLabel(ab.cost)})`, why: myAct ? why : 'Not your turn', run: () => startPay('activate', uid), primary: true })
+		actions.push({ key: 'ab', label: <>{ab.label} <CostView cost={ab.cost} /></>, why: myAct ? why : 'Not your turn', run: () => startPay('activate', uid), primary: true })
 	}
-	if (myAct && !s.turn.main && c.zone === 'battlefield' && controller(s, uid) === me && canAttackWith(s, uid)) actions.push({ label: 'Attack with this unit', run: () => startAttack(null, uid) })
-	if (myAct && !s.turn.main && controller(s, uid) === foe && (c.zone === 'battlefield' || c.zone === 'pb')) actions.push({ label: `Attack ${c.zone === 'pb' ? 'this Phoenixborn' : 'this unit'}`, run: () => startAttack(c.zone === 'pb' ? 'pb' : uid) })
+	if (myAct && !s.turn.main && c.zone === 'battlefield' && controller(s, uid) === me && canAttackWith(s, uid)) actions.push({ key: 'atk', label: 'Attack with this unit', run: () => startAttack(null, uid) })
+	if (myAct && !s.turn.main && controller(s, uid) === foe && (c.zone === 'battlefield' || c.zone === 'pb')) actions.push({ key: 'atkme', label: `Attack ${c.zone === 'pb' ? 'this Phoenixborn' : 'this unit'}`, run: () => startAttack(c.zone === 'pb' ? 'pb' : uid) })
 	const dice = diceOn(s, uid)
 	return (
 		<div className="view">
@@ -560,7 +560,7 @@ function Viewer({ s, uid, me, myAct, startPay, startAttack, hideHand }: { s: Gam
 					{d.type}
 					{c.zone !== 'hand' && c.zone !== 'pb' ? ` · ${s.players[c.owner].name}` : ''}
 				</div>
-				{t?.text && <div className="view-text">{readable(t.text)}</div>}
+				{t?.text && <div className="view-text"><RichText text={t.text} /></div>}
 				{(c.wounds > 0 || c.exhaust > 0 || dice.length > 0) && (
 					<div className="view-state">
 						{c.wounds > 0 && <span>{c.wounds} wound{c.wounds > 1 ? 's' : ''}</span>}
@@ -578,7 +578,7 @@ function Viewer({ s, uid, me, myAct, startPay, startAttack, hideHand }: { s: Gam
 				{ab && <div className="view-help">{ab.help}</div>}
 				<div className="view-actions">
 					{actions.map((a) => (
-						<button key={a.label} className={a.primary && !a.why ? 'primary' : ''} disabled={!!a.why} onClick={a.run} title={a.why ?? ''}>
+						<button key={a.key} className={a.primary && !a.why ? 'primary' : ''} disabled={!!a.why} onClick={a.run} title={a.why ?? ''}>
 							{a.label}
 							{a.why && <small>{a.why}</small>}
 						</button>

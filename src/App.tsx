@@ -10,6 +10,7 @@ import { coachFor, eventNote, INTRO, type CoachStep } from './ui/coach'
 import { hostGame, joinGame, newGameCode, type Conn, type Host } from './net/transport'
 import { clearJoinFromUrl, isGuestMsg, isHostMsg, joinCodeFromUrl, joinLink, type GuestMsg, type HostMsg } from './net/online'
 import { isMuted, setMuted, soundFor, unlockAudio } from './ui/sfx'
+import { loadDiceFont } from './ui/Die'
 
 const W = 1440
 const H = 900
@@ -111,6 +112,7 @@ export default function App() {
 
 	useEffect(() => {
 		loadCardText().then(() => setTextReady((n) => n + 1))
+		void loadDiceFont()
 	}, [])
 
 	const state = session?.history[session.history.length - 1]
