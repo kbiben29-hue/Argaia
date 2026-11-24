@@ -663,6 +663,41 @@ export function apply(input: GameState, i: Intent): GameState {
 			log(s, `${s.players[p].name} passes.`)
 			return settle(s)
 		}
+		case 'forfeit': {
+			if (s.pending.kind === 'over') fail('The game is over')
+			log(s, `${s.players[p].name} forfeits. ${s.players[other(p)].name} wins!`)
+			s.phase = 'over'
+			s.queue = []
+			s.pending = { kind: 'over', winner: other(p) }
+			return s
+		}
+		case 'manual': {
+			if (s.pending.kind === 'over') fail('The game is over')
+			const c = s.inst[i.card]
+			if (!c || !inPlay(s, i.card)) fail('Pick a card in play')
+			const name = nameOf(s, i.card)
+			const who = s.players[p].name
+			if (i.op === 'wound+') c.wounds += 1
+			else if (i.op === 'wound-') c.wounds = Math.max(0, c.wounds - 1)
+			else if (i.op === 'exhaust+') c.exhaust += 1
+			else if (i.op === 'exhaust-') c.exhaust = Math.max(0, c.exhaust - 1)
+			else {
+				if (c.zone === 'pb') fail('A Phoenixborn can’t leave play')
+				leavePlay(s, i.card, i.op === 'hand' ? 'hand' : 'discard')
+			}
+			const what = { 'wound+': 'adds a wound to', 'wound-': 'removes a wound from', 'exhaust+': 'exhausts', 'exhaust-': 'readies', discard: 'discards', hand: 'returns to hand' }[i.op]
+			log(s, `Manual fix: ${who} ${what} ${name}.`)
+			checkDestroyed(s)
+			try {
+				checkPhoenixborn(s)
+			} catch (e) {
+				if (!(e instanceof GameOver)) throw e
+				s.phase = 'over'
+				s.queue = []
+				s.pending = { kind: 'over', winner: e.winner }
+			}
+			return s
+		}
 		case 'endTurn': {
 			const t = turnProblem(s, p)
 			if (t) fail(t)

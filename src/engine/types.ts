@@ -165,6 +165,11 @@ export type Intent =
 	| { t: 'pass'; player: PlayerId }
 	| { t: 'endTurn'; player: PlayerId }
 	| { t: 'choose'; player: PlayerId; picks: string[] }
+	| { t: 'forfeit'; player: PlayerId }
+	/** "Manual fixes": adjust a card by hand to undo a mistake */
+	| { t: 'manual'; player: PlayerId; card: number; op: ManualOp }
+
+export type ManualOp = 'wound+' | 'wound-' | 'exhaust+' | 'exhaust-' | 'discard' | 'hand'
 
 /** A deck as played: Phoenixborn, 30 cards (stubs, with duplicates), conjuration pile, dice, First Five suggestion. */
 export interface DeckList {

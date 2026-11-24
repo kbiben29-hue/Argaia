@@ -111,6 +111,21 @@ export default function App() {
 	const [layoutChoice, setLayoutChoice] = useState<LayoutChoice>(() => readLayout())
 	const pocket = layoutChoice === 'pocket' || (layoutChoice === 'auto' && phone)
 	const [muted, setMutedState] = useState(isMuted())
+	const [manual, setManual] = useState(() => {
+		try {
+			return localStorage.getItem('argaia.manual') === '1'
+		} catch {
+			return false
+		}
+	})
+	const toggleManual = () => {
+		setManual(!manual)
+		try {
+			localStorage.setItem('argaia.manual', manual ? '0' : '1')
+		} catch {
+			/* ignore */
+		}
+	}
 	const chooseLayout = (c: LayoutChoice) => {
 		setLayoutChoice(c)
 		try {
@@ -424,6 +439,9 @@ export default function App() {
 					muted={muted}
 					onMute={() => (setMuted(!muted), setMutedState(!muted))}
 					holdQuestion={!!t && t.intro < pagesFor(t).length}
+					manual={manual}
+					onManual={toggleManual}
+					canForfeit={!t?.drill}
 					hint={coachStep && t && !t.note && t.intro >= pagesFor(t).length ? coachStep.hint : undefined}
 					coach={t ? <CoachPanel session={session} step={coachStep} setSession={setSession} onDrill={restartDrill} onLessons={() => (setLessonsOpen(true), setSession(null))} /> : undefined}
 					netBadge={session.online ? <NetBadge net={net} code={session.online.code} host={session.online.role === 'host'} error={netError} onDismiss={() => setNetError(null)} /> : undefined}

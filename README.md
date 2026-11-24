@@ -11,7 +11,7 @@ starting with the two *Ashes Ascendancy* starter decks: **Arren Frostpeak** (The
 dice) and **Issa Brightmore** (The Spark of Invention, artifice dice). It's a fan project with no official
 standing.
 
-- **Vs computer** — Easy or Normal.
+- **Vs computer** — Easy, Normal or Expert (looks at your best reply before it moves).
 - **Two players** on one device (the hand is hidden while you pass it over).
 - **Play a friend** online with an invite link.
 - **Learn** — two levels, like Holodeck:
@@ -22,7 +22,9 @@ standing.
     where the coach points out combos as they come up, plus combo drills: set positions with a goal
     ("win this turn"), coached step by step, with a debrief when you solve them.
 
-Every game saves itself and can be undone move by move.
+Every game saves itself and can be undone move by move. **Forfeit** is in the menu, and **Manual fixes**
+(menu switch) adds buttons to the card viewer to fix a mistake by hand: add or remove a wound, exhaust or
+ready a card, return it to hand or discard it.
 
 ## iPhone and iPad
 
@@ -31,10 +33,23 @@ Every game saves itself and can be undone move by move.
   bottom. Tap any card to see it big with its buttons.
 - Open the play link in Safari, then **Share → Add to Home Screen** for a full-screen Argaia app.
 
+## Look and feel
+
+Styled after Ashes itself: a slate-blue table, ivory and silver panels like the card frames, gold trim,
+and the real dice symbols and colours. Status and buttons sit in the right-hand column on computers and
+iPads, and above your hand on phones.
+
 ## How to play on the table
 
-- **Tap a card** to see it large with its rules text and what you can do with it (Play, use its ability,
-  attack with it, attack it).
+- **Tap a card** (or point at it with a mouse) to see it large with its rules text and what you can do with it
+  (Play, use its ability, attack with it, attack it). Tap it again or press Esc to close. Hand cards also
+  zoom when you point at them.
+- **Drag and drop** (mouse or finger): drag a card from your hand up onto the table to play it, drag one of
+  your units onto an enemy unit to attack it (an arrow follows you) or onto their Phoenixborn to start an
+  attack, and drag a power die onto a card to use its dice power.
+- **Ability buttons** (⚡) appear right on your cards when their ability can be used.
+- **Piles**: each side shows its draw pile, discard pile (top card showing) and conjuration pile — tap the
+  discard or conjuration pile to look through it.
 - **Paying**: the game picks the cheapest dice for you; tap dice to swap before you confirm.
 - **Attack**: press Attack (or "Attack with this unit"), tap their Phoenixborn or a unit, tap your attackers, then **Attack!**
 - **Dice power**: tap one of your dice showing its power symbol, then tap the card to put it on.

@@ -7,7 +7,7 @@ import { legalIntents } from '../engine/moves'
 import { Rng } from '../engine/rng'
 import { other, type GameState, type Intent, type PlayerId, type Question } from '../engine/types'
 
-export type BotLevel = 'easy' | 'normal'
+export type BotLevel = 'easy' | 'normal' | 'expert'
 
 /** Best answer to a question by option score (defaults for the First Five). */
 export function bestPicks(q: Question): string[] {
@@ -105,7 +105,55 @@ export function chooseIntent(s: GameState): Intent | null {
 	return best
 }
 
+/**
+ * Expert: take the best few moves by the normal score, then for each one let the opponent reply with
+ * their own best move (and answer every question that raises), and keep the move that holds up best.
+ */
+export function expertIntent(s: GameState): Intent | null {
+	if (s.pending.kind !== 'act') return chooseIntent(s)
+	const me = s.pending.player
+	const scored = legalIntents(s)
+		.map((m) => ({ m, v: scoreIntent(s, m, me) }))
+		.filter((x) => x.v > -Infinity)
+		.sort((a, b) => b.v - a.v)
+		.slice(0, 7)
+	let best: Intent | null = null
+	let bestV = -Infinity
+	for (const { m, v: first } of scored) {
+		let n: GameState
+		try {
+			n = resolve(apply(s, m))
+		} catch {
+			continue
+		}
+		// play on until it's the opponent's move (finish our own turn greedily: side action, end turn)
+		for (let k = 0; k < 4 && n.pending.kind === 'act' && n.pending.player === me; k++) {
+			const i = chooseIntent(n)
+			if (!i) break
+			n = resolve(apply(n, i))
+		}
+		let v = evaluate(n, me)
+		if (n.pending.kind === 'act' && n.pending.player !== me) {
+			const reply = chooseIntent(n)
+			if (reply) {
+				try {
+					v = evaluate(resolve(apply(n, reply)), me)
+				} catch {
+					/* keep v */
+				}
+			}
+		}
+		v = v * 0.7 + first * 0.3
+		if (v > bestV) {
+			bestV = v
+			best = m
+		}
+	}
+	return best ?? chooseIntent(s)
+}
+
 export function botIntent(s: GameState, level: BotLevel = 'normal'): Intent | null {
+	if (level === 'expert') return expertIntent(s)
 	if (level === 'easy' && s.pending.kind === 'act') {
 		const r = new Rng((s.rng ^ (s.log.length * 2654435761)) >>> 0)
 		if (r.float() < 0.3) {

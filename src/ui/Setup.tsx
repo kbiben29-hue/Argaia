@@ -156,6 +156,7 @@ export function Setup({ onStart, joinCode, canResume, resumeLabel, onResume, ini
 							<select value={level} onChange={(e) => setLevel(e.target.value as BotLevel)}>
 								<option value="easy">Easy</option>
 								<option value="normal">Normal</option>
+								<option value="expert">Expert (thinks a move ahead)</option>
 							</select>
 						</label>
 					</div>

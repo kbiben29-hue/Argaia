@@ -27,7 +27,7 @@ npm run build        # vite build (base './')
   `PLAY_CHECKS`, `HOOKS` for the two reactions (Dodge after attackers are declared, Barrier when a charged card is dealt damage).
 - `src/engine/dice.ts` — cost parsing (`[[main]]`, `1 [[astral:class]]`…), `paysExactly`, `autoPay`.
 - `src/engine/moves.ts` — `legalIntents(state)` (dice auto-paid); used by the bot, coach and fuzz test.
-- `src/bot/bot.ts` — tries each legal move, answers the follow-up questions by option `score`, keeps the best `evaluate()`.
+- `src/bot/bot.ts` — levels easy / normal / expert (expert checks the opponent's best reply). Normal tries each legal move, answers the follow-up questions by option `score`, keeps the best `evaluate()`.
 - `src/data/starterCards.ts` — names, types, costs and values only (no rules text). `src/data/decks.ts` — the two decklists.
 - `src/data/cardText.ts` — loads text + images from raw.githubusercontent.com/kbiben29-hue/ashes-cards at run time (cached in localStorage).
 - `src/ui/` — `Board.tsx` (console table + pocket phone layout from the same pieces), `Setup.tsx`, `Card.tsx`, `Die.tsx`, `coach.ts`, `sfx.ts`, `styles.css`.
@@ -46,9 +46,14 @@ A question with one option (min 1) or exactly min=max=options is answered automa
 
 ## Layouts
 
-`Board` renders **console** (1440×900 table scaled to fit; computers and iPad) and **pocket** (phone:
-touch-first page, foe at top, sticky prompt bar, hand docked at the bottom, bottom sheets for the card viewer,
-questions and the menu/log). Auto picks pocket on touch screens under 600px short side; the menu has a switch
+`Board` renders **console** (1440×900 table scaled to fit; computers and iPad: table on the left, side column
+with menu, status/prompt, coach, big card viewer and log on the right) and **pocket** (phone: foe at top,
+prompt docked above the hand at the bottom, floating card viewer and question panel, menu/log sheet).
+Questions are a floating panel that never hides the table (Hide/Show). Drag and drop uses pointer events
+(hand card → play, unit → attack with an arrow, power die → dice power; on touch only upward drags start so
+rows still scroll sideways). Cards fly to their new place (FLIP in `Card.tsx`), dice roll when their side
+changes, a banner announces your turn. Theme: Ashes look — slate-blue table, ivory/silver panels, gold trim.
+`manual` intents ("Manual fixes" switch) and `forfeit` are in the engine. Auto picks pocket on touch screens under 600px short side; the menu has a switch
 (localStorage `argaia.layout`). Tapping a card opens the viewer with its actions — no hover needed anywhere.
 
 ## Online play
