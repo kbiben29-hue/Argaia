@@ -1302,3 +1302,57 @@ input {
 .dc-magic .die {
 	border-width: 1px;
 }
+
+.learn-card {
+	border-top: 1px solid var(--line);
+	padding-top: 14px;
+}
+.learn-card h3 {
+	font-family: 'Cinzel', serif;
+	margin: 0 0 6px;
+	color: var(--ember2);
+}
+.learn-card p {
+	margin: 0 0 10px;
+	line-height: 1.4;
+}
+.lessons {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+}
+.lesson-deck {
+	display: flex;
+	gap: 14px;
+	align-items: flex-start;
+	background: rgba(0, 0, 0, 0.2);
+	border: 1px solid var(--line);
+	border-radius: 12px;
+	padding: 12px;
+}
+.lesson-deck .face {
+	width: 96px;
+	border-radius: 8px;
+	flex: none;
+}
+.lesson-body {
+	flex: 1;
+	min-width: 0;
+}
+.lesson-body p {
+	margin: 6px 0 10px;
+	color: var(--dim);
+}
+.lesson-buttons {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+@media (max-width: 520px) {
+	.lesson-deck .face {
+		width: 64px;
+	}
+	.lesson-buttons button {
+		flex: 1 1 100%;
+	}
+}

@@ -4,6 +4,7 @@ import { defOf } from '../engine/engine'
 import type { BotLevel } from '../bot/bot'
 import { CardFace } from './Card'
 import { DieChip } from './Die'
+import { DECK_LESSONS, drillsFor, PLANS, pbName, type DeckId } from './lessons'
 
 export interface SetupResult {
 	decks: [string, string]
@@ -13,6 +14,8 @@ export interface SetupResult {
 	tutorial: boolean
 	online?: 'host' | 'guest'
 	seed: number
+	/** deck lessons: coached game with a deck, or one of its drills */
+	lesson?: { deck: DeckId; drill?: string }
 }
 
 type Tab = 'computer' | 'hotseat' | 'friend' | 'learn'
@@ -26,8 +29,8 @@ const readName = () => {
 	}
 }
 
-export function Setup({ onStart, joinCode, canResume, resumeLabel, onResume }: { onStart: (r: SetupResult) => void; joinCode: string | null; canResume: boolean; resumeLabel?: string; onResume: () => void }) {
-	const [tab, setTab] = useState<Tab>(joinCode ? 'friend' : 'computer')
+export function Setup({ onStart, joinCode, canResume, resumeLabel, onResume, initialLessons }: { onStart: (r: SetupResult) => void; joinCode: string | null; canResume: boolean; resumeLabel?: string; onResume: () => void; initialLessons?: boolean }) {
+	const [tab, setTab] = useState<Tab>(joinCode ? 'friend' : initialLessons ? 'learn' : 'computer')
 	const [deck0, setDeck0] = useState('arren')
 	const [deck1, setDeck1] = useState('issa')
 	const [name0, setName0] = useState(readName)
@@ -98,13 +101,45 @@ export function Setup({ onStart, joinCode, canResume, resumeLabel, onResume }: {
 			{tab === 'learn' && (
 				<section className="panel">
 					<h2>Learn to play</h2>
-					<p>A coached game: you play Arren Frostpeak against the computer’s Issa Brightmore. A coach explains every step — dice, costs, attacks, blocks, reactions — and makes the suggested move glow. You can switch the coach off any time.</p>
 					<label className="field">
 						Your name <input value={name0} onChange={(e) => saveName(e.target.value)} maxLength={24} />
 					</label>
-					<button className="primary big" onClick={() => onStart({ decks: ['arren', 'issa'], names: [name0 || 'Player', 'Issa (computer)'], bot: true, level: 'easy', tutorial: true, seed: seed() })}>
-						Start the tutorial
-					</button>
+					<div className="learn-card">
+						<h3>Tutorial: practice game</h3>
+						<p>A coached game: you play Arren Frostpeak against the computer’s Issa Brightmore. The coach explains every step — dice, costs, attacks, blocks, reactions — and makes the suggested move glow. You can switch it off any time.</p>
+						<button className="primary big" onClick={() => onStart({ decks: ['arren', 'issa'], names: [name0 || 'Player', 'Issa (computer)'], bot: true, level: 'easy', tutorial: true, seed: seed() })}>
+							Start the tutorial
+						</button>
+					</div>
+					<div className="learn-card">
+						<h3>Deck lessons &amp; combos</h3>
+						<p className="dim">For each deck: a guide to its game plan, then a coached game where the coach points out combos as they come up, plus combo drills — set positions with a goal, coached step by step.</p>
+						<div className="lessons">
+							{DECK_LESSONS.map((id: DeckId) => {
+								const d = DECKS[id]
+								return (
+									<div key={id} className="lesson-deck">
+										<CardFace stub={d.pb} name={pbName(id)} type="Phoenixborn" w={96} />
+										<div className="lesson-body">
+											<div className="dc-name">{pbName(id)}</div>
+											<div className="dc-deck">{d.name}</div>
+											<p className="small">{PLANS[id][0].body}</p>
+											<div className="lesson-buttons">
+												<button className="primary" onClick={() => onStart({ decks: [id, id === 'arren' ? 'issa' : 'arren'], names: [name0 || 'Player', `${pbName(id === 'arren' ? 'issa' : 'arren').split(' ')[0]} (computer)`], bot: true, level: 'easy', tutorial: true, lesson: { deck: id }, seed: seed() })}>
+													Game plan + coached game
+												</button>
+												{drillsFor(id).map((dr) => (
+													<button key={dr.id} title={dr.goal} onClick={() => onStart({ decks: [id, id === 'arren' ? 'issa' : 'arren'], names: [name0 || 'Player', 'Computer'], bot: true, level: 'normal', tutorial: true, lesson: { deck: id, drill: dr.id }, seed: seed() })}>
+														Drill: {dr.title}
+													</button>
+												))}
+											</div>
+										</div>
+									</div>
+								)
+							})}
+						</div>
+					</div>
 				</section>
 			)}
 

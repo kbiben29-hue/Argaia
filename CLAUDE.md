@@ -31,6 +31,8 @@ npm run build        # vite build (base './')
 - `src/data/starterCards.ts` — names, types, costs and values only (no rules text). `src/data/decks.ts` — the two decklists.
 - `src/data/cardText.ts` — loads text + images from raw.githubusercontent.com/kbiben29-hue/ashes-cards at run time (cached in localStorage).
 - `src/ui/` — `Board.tsx` (console table + pocket phone layout from the same pieces), `Setup.tsx`, `Card.tsx`, `Die.tsx`, `coach.ts`, `sfx.ts`, `styles.css`.
+- `src/engine/scenario.ts` — build a position directly (drills, tests).
+- `src/ui/lessons.ts` — per-deck `PLANS`, `COMBOS` (alerts in coached deck games), `DRILLS` (built with `scenario`; `lessons.test.ts` solves each one and checks the obvious wrong move fails). Lesson text is our own wording.
 - `src/App.tsx` — fit-to-screen scaling of the 1440×900 stage, history/undo, autosave, bot loop, online host/guest.
 
 ## Tasks and questions

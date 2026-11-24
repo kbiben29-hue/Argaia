@@ -14,7 +14,13 @@ standing.
 - **Vs computer** — Easy or Normal.
 - **Two players** on one device (the hand is hidden while you pass it over).
 - **Play a friend** online with an invite link.
-- **Learn** — a coached game that explains every step and makes the suggested move glow.
+- **Learn** — two levels, like Holodeck:
+  - **Tutorial: practice game** — a real game against the computer with a coach that explains each step
+    (First Five, dice and costs, main and side actions, attacking, blocking, guarding, reactions, recovery)
+    and makes the suggested card, die or button glow.
+  - **Deck lessons & combos** — for Arren and for Issa: a guide to the deck's game plan, then a coached game
+    where the coach points out combos as they come up, plus combo drills: set positions with a goal
+    ("win this turn"), coached step by step, with a debrief when you solve them.
 
 Every game saves itself and can be undone move by move.
 

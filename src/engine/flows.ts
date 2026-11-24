@@ -285,7 +285,7 @@ const attack: Script = (c) => {
 				c,
 				foe,
 				`Block ${nameOf(s, a)} (attack ${attackOf(s, a)}, life ${lifeOf(s, a) - s.inst[a].wounds})? A blocker takes the hit instead of your Phoenixborn and must counter.`,
-				[{ id: 'none', label: 'No block', score: 0 }, ...opts.map((u) => ({ id: String(u), label: `Block with ${nameOf(s, u)} (${attackOf(s, u)}/${lifeOf(s, u) - s.inst[u].wounds})`, uid: u, score: blockScore(c, a, u) }))],
+				[{ id: 'none', label: 'No block', score: 0 }, ...opts.map((u) => ({ id: String(u), label: `Block with ${nameOf(s, u)} (${attackOf(s, u)}/${lifeOf(s, u) - s.inst[u].wounds})`, uid: u, score: blockScore(c, a, u, attackers.filter((x) => !defenders.has(x)).reduce((n, x) => n + attackOf(s, x), 0)) }))],
 				'block',
 			)
 			if (pick && pick !== 'none') {
@@ -369,7 +369,7 @@ const attack: Script = (c) => {
 }
 
 /** Defender's view of blocking attacker `a` with unit `u`. */
-function blockScore(c: Ctx, a: number, u: number): number {
+function blockScore(c: Ctx, a: number, u: number, incoming: number): number {
 	const s = c.s
 	const myLeft = lifeOf(s, u) - s.inst[u].wounds
 	const theirLeft = lifeOf(s, a) - s.inst[a].wounds
@@ -379,7 +379,8 @@ function blockScore(c: Ctx, a: number, u: number): number {
 		const pb = s.players[c.rival].pb
 		return Number(defOf(s.inst[pb].stub).life) - s.inst[pb].wounds
 	})()
-	const danger = attackOf(s, a) >= pbLeftNow ? 20 : 0
+	// lethal if this attacker alone, or all unblocked attackers together, would finish the Phoenixborn
+	const danger = attackOf(s, a) >= pbLeftNow ? 20 : incoming >= pbLeftNow ? 10 + attackOf(s, a) : 0
 	let sc = danger
 	if (kills && !dies) sc += 6
 	else if (kills && dies) sc += unitValue(s, a) - unitValue(s, u) + 1
