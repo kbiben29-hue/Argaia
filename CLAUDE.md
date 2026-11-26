@@ -42,7 +42,8 @@ npm run build        # vite build (base './')
 - `src/data/cardText.ts` — loads text + images from raw.githubusercontent.com/kbiben29-hue/ashes-cards at run time (cached in localStorage).
 - `src/ui/` — `Board.tsx` (console table + pocket phone layout from the same pieces), `Setup.tsx`, `Card.tsx`, `Die.tsx`, `coach.ts`, `sfx.ts`, `styles.css`.
 - `src/engine/scenario.ts` — build a position directly (drills, tests).
-- `src/ui/lessons.ts` — per-deck `PLANS`, `COMBOS` (alerts in coached deck games), `DRILLS` (built with `scenario`; `lessons.test.ts` solves each one and checks the obvious wrong move fails). Lesson text is our own wording.
+- `src/ui/lessons.ts` — per-deck `PLANS`, `COMBOS` (alerts in coached deck games), `DRILLS` (built with `scenario`;
+  drills with `course: 'fun'` are the "Finding the fun" puzzles, intro pages `FUN_INTRO`, optional `failed`; `lessons.test.ts` solves each one and checks the obvious wrong move fails). Lesson text is our own wording.
 - `src/App.tsx` — fit-to-screen scaling of the 1440×900 stage, history/undo, autosave, bot loop, online host/guest.
 
 ## Tasks and questions
@@ -64,7 +65,8 @@ Questions are a floating panel that never hides the table (Hide/Show). Drag and 
 rows still scroll sideways). Cards fly to their new place (FLIP in `Card.tsx`), dice roll when their side
 changes, a banner announces your turn. Theme: Ashes look — slate-blue table, ivory/silver panels, gold trim.
 `manual` intents ("Manual fixes" switch) and `forfeit` are in the engine. Auto picks pocket on touch screens under 600px short side; the menu has a switch
-(localStorage `argaia.layout`). Tapping a card opens the viewer with its actions — no hover needed anywhere.
+(localStorage `argaia.layout`). Long-press menus are off (CSS `-webkit-touch-callout`/`user-select` + a
+`contextmenu` handler in `main.tsx`; inputs and `.selectable` stay selectable). Tapping a card opens the viewer with its actions — no hover needed anywhere.
 
 ## Online play
 

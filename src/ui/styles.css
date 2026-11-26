@@ -1957,3 +1957,27 @@ input {
 	flex: 1;
 	min-width: 280px;
 }
+
+/* No copy / paste / share / save-image menus on long press (iPhone, iPad, Android) */
+html,
+body,
+#root,
+#root * {
+	-webkit-touch-callout: none;
+	-webkit-user-select: none;
+	user-select: none;
+	-webkit-tap-highlight-color: transparent;
+}
+img {
+	-webkit-user-drag: none;
+	user-drag: none;
+}
+#root input,
+#root textarea,
+#root select,
+#root .selectable,
+#root .selectable * {
+	-webkit-user-select: text;
+	user-select: text;
+	-webkit-touch-callout: default;
+}

@@ -28,16 +28,22 @@ types the starters don't.
   wounds it by the aspect's blood value. (This uses the "Fury" aspects: Rampage, Hunting Instincts,
   Firebelly, Iron Scales, Frozen Fear and Whiplash.)
 
-- **Vs computer** — Easy, Normal or Expert (looks at your best reply before it moves).
+- **Vs computer** — Easy, Normal or Expert (looks at your best reply before it moves); pick any deck for
+  either side, or The Corpse of Viros as the opponent.
 - **Two players** on one device (the hand is hidden while you pass it over).
 - **Play a friend** online with an invite link.
-- **Learn** — two levels, like Holodeck:
+- **Learn**:
+  - **Finding the fun (start here)** — seven one-turn puzzles where the obvious attack fails and one idea
+    wins: side actions, Meditate, removing blockers, Hunter's Mark, turning your own losses into damage,
+    going wide, starving the opponent's dice, and bleeding the chimera.
   - **Tutorial: practice game** — a real game against the computer with a coach that explains each step
     (First Five, dice and costs, main and side actions, attacking, blocking, guarding, reactions, recovery)
     and makes the suggested card, die or button glow.
   - **Deck lessons & combos** — for Arren and for Issa (the starter decks): a guide to the deck's game plan, then a coached game
     where the coach points out combos as they come up, plus combo drills: set positions with a goal
     ("win this turn"), coached step by step, with a debrief when you solve them.
+
+Long-pressing a card never pops up the copy / share / save-image menu.
 
 Every game saves itself and can be undone move by move. **Forfeit** is in the menu, and **Manual fixes**
 (menu switch) adds buttons to the card viewer to fix a mistake by hand: add or remove a wound, exhaust or

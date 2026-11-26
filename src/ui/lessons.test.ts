@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { tryApply, apply } from '../engine/engine'
+import { tryApply, apply, canAttackWith, playCost, suggestDice } from '../engine/engine'
 import { bestPicks } from '../bot/bot'
 import type { GameState, Intent, PlayerId } from '../engine/types'
 import { DRILLS, drillCoach, comboNote, PLANS } from './lessons'
@@ -23,6 +23,62 @@ const unit = (s: GameState, p: PlayerId, stub: string) => s.players[p].battlefie
 const hand = (s: GameState, stub: string) => s.players[0].hand.find((u) => s.inst[u].stub === stub)!
 const powerDie = (s: GameState) => s.players[0].dice.find((d) => d.loc === 'active' && d.level === 'power')!.id
 const basics = (s: GameState, n: number) => s.players[0].dice.filter((d) => d.loc === 'active' && d.level === 'basic').slice(0, n).map((d) => d.id)
+
+const die = (s: GameState, magic: string, level: string) => s.players[0].dice.find((d) => d.loc === 'active' && d.magic === magic && d.level === level)!.id
+const yesTo = (q: { options: { id: string }[] }) => (q.options.some((o) => o.id === 'yes') ? ['yes'] : null)
+
+function solveFun(id: string, s: GameState): GameState {
+	switch (id) {
+		case 'fun-side-action':
+			s = answer(go(s, { t: 'dicePower', player: 0, die: die(s, 'natural', 'power'), target: unit(s, 1, 'frost-talon') }))
+			return answer(go(s, { t: 'attack', player: 0, target: 'pb', attackers: [unit(s, 0, 'cerasaurus-mount')] }))
+		case 'fun-meditate': {
+			s = go(s, {
+				t: 'meditate',
+				player: 0,
+				items: [
+					{ from: 'hand', card: hand(s, 'transmute-magic'), die: die(s, 'ceremonial', 'class'), level: 'power' },
+					{ from: 'hand', card: hand(s, 'consume-soul'), die: die(s, 'sympathy', 'basic'), level: 'class' },
+				],
+			})
+			const mv = hand(s, 'master-vampire')
+			return answer(go(s, { t: 'play', player: 0, card: mv, dice: suggestDice(s, 0, playCost(s, mv))! }))
+		}
+		case 'fun-mark': {
+			const cap = unit(s, 1, 'skybreak-captain')
+			s = answer(go(s, { t: 'activate', player: 0, card: s.players[0].pb, dice: [] }), () => [String(cap)])
+			return answer(go(s, { t: 'attack', player: 0, target: cap, attackers: [unit(s, 0, 'psychic-vampire')] }))
+		}
+		case 'fun-fuel':
+			return answer(go(s, { t: 'play', player: 0, card: hand(s, 'fear'), dice: [die(s, 'charm', 'basic')] }), yesTo)
+		case 'fun-wide':
+			return answer(go(s, { t: 'attack', player: 0, target: 'pb', attackers: s.players[0].battlefield.slice() }))
+		case 'fun-dice-denial': {
+			const powers = s.players[1].dice.filter((d) => d.loc === 'active' && d.level === 'power').map((d) => d.id)
+			s = answer(go(s, { t: 'dicePower', player: 0, die: die(s, 'illusion', 'power') }), () => powers.slice(0, 2))
+			return answer(go(s, { t: 'activate', player: 0, card: s.players[0].spellboard[0][0], dice: [] }))
+		}
+		case 'fun-bleed':
+			return answer(go(s, { t: 'dicePower', player: 0, die: die(s, 'natural', 'power'), target: unit(s, 1, 'whiplash') }))
+	}
+	return s
+}
+
+test('the obvious attack fails in every Finding-the-fun puzzle', () => {
+	for (const d of DRILLS.filter((x) => x.course === 'fun')) {
+		const start = d.build(7)
+		const mine = start.players[0].battlefield.filter((u) => canAttackWith(start, u))
+		if (d.id === 'fun-wide') {
+			const s = answer(go(start, { t: 'attack', player: 0, target: 'pb', attackers: [unit(start, 0, 'raptor-herder')] }))
+			assert.ok(!d.success(s, start), 'one attacker is not enough')
+			continue
+		}
+		if (mine.length === 0) continue
+		const target = d.id === 'fun-mark' ? unit(start, 1, 'skybreak-captain') : 'pb'
+		const s = answer(go(start, { t: 'attack', player: 0, target, attackers: target === 'pb' ? mine : mine.slice(0, 1) }))
+		assert.ok(!d.success(s, start), `${d.id}: a straight attack doesn't solve it`)
+	}
+})
 
 test('every drill can be solved, and the coach has a step until it is', () => {
 	for (const d of DRILLS) {
@@ -54,6 +110,7 @@ test('every drill can be solved, and the coach has a step until it is', () => {
 				return q.options.some((o) => o.id === id) ? [id] : null
 			})
 		}
+		s = solveFun(d.id, s)
 		assert.ok(d.success(s, start), `${d.id}: solved`)
 		assert.equal(drillCoach(d, s, start), null, `${d.id}: coach has nothing left to say`)
 	}

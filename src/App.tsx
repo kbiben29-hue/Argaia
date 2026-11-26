@@ -7,7 +7,7 @@ import { DECKS } from './data/decks'
 import { Board, type LayoutChoice } from './ui/Board'
 import { Setup, type SetupResult } from './ui/Setup'
 import { coachFor, eventNote, INTRO, type CoachStep } from './ui/coach'
-import { comboNote, deckName, DRILLS, drillCoach, drillsFor, PLANS, rivalDeck, type DeckId } from './ui/lessons'
+import { comboNote, deckName, DRILLS, drillCoach, drillsFor, FUN_INTRO, PLANS, rivalDeck, type DeckId } from './ui/lessons'
 import { hostGame, joinGame, newGameCode, type Conn, type Host } from './net/transport'
 import { clearJoinFromUrl, isGuestMsg, isHostMsg, joinCodeFromUrl, joinLink, type GuestMsg, type HostMsg } from './net/online'
 import { isMuted, setMuted, soundFor, unlockAudio } from './ui/sfx'
@@ -29,8 +29,8 @@ interface Tutorial {
 	intro: number
 	seen: string[]
 	note: CoachStep | null
-	/** deck lessons: a coached game with a starter deck, or one of its combo drills */
-	deck?: DeckId
+	/** deck lessons: a coached game with a starter deck, or one of its combo drills (any deck for course drills) */
+	deck?: string
 	drill?: string
 }
 
@@ -38,9 +38,13 @@ interface Tutorial {
 function pagesFor(t: Tutorial): { title: string; body: string }[] {
 	if (t.drill) {
 		const d = DRILLS.find((x) => x.id === t.drill)!
+		if (d.course === 'fun') {
+			const first = drillsFor('fun')[0] === d
+			return [...(first ? FUN_INTRO : []), { title: d.idea?.title ?? d.title, body: `${d.idea?.body ?? ''} Goal: ${d.goal}` }]
+		}
 		return [{ title: d.title, body: `${deckName(d.deck)} combo drill. Goal: ${d.goal} The coach walks you through it step by step — whatever glows is the next move.` }]
 	}
-	if (t.deck) return PLANS[t.deck]
+	if (t.deck) return PLANS[t.deck as DeckId] ?? INTRO
 	return INTRO
 }
 
@@ -360,7 +364,7 @@ export default function App() {
 			setHandoff(null)
 			return
 		}
-		const decks: [string, string] = r.lesson ? [r.lesson.deck, rivalDeck(r.lesson.deck)] : r.decks
+		const decks: [string, string] = r.lesson ? [r.lesson.deck, rivalDeck(r.lesson.deck as DeckId)] : r.decks
 		const g = newGame({ seed: r.seed, decks, names: r.names, ...(r.solo ? { soloLevel: r.solo.level, soloStage: r.solo.stage } : {}) })
 		setSession({ history: [g], bot: r.bot, level: r.level, tutorial: r.tutorial ? { intro: 0, seen: [], note: null, ...(r.lesson ? { deck: r.lesson.deck } : {}) } : undefined })
 		setViewer(0)
@@ -380,7 +384,9 @@ export default function App() {
 		const d = DRILLS.find((x) => x.id === id)!
 		const name = session?.history[0].players[0].name ?? 'Player'
 		lastLog.current = 0
-		setSession({ history: [d.build((Date.now() >>> 0) ^ 0x5bd1, name)], bot: true, level: 'normal', tutorial: { intro: 1, seen: [], note: null, deck: d.deck, drill: d.id } })
+		const len = pagesFor({ intro: 0, seen: [], note: null, drill: d.id }).length
+		const intro = id === session?.tutorial?.drill ? len : len - 1
+		setSession({ history: [d.build((Date.now() >>> 0) ^ 0x5bd1, name)], bot: true, level: 'normal', tutorial: { intro, seen: [], note: null, deck: d.deck, drill: d.id } })
 	}
 
 	let body
@@ -475,7 +481,8 @@ function CoachPanel({ session, step, setSession, onDrill, onLessons }: { session
 	const update = (patch: Partial<Tutorial>) => setSession({ ...session, tutorial: { ...t, ...patch } })
 	const drill = t.drill ? DRILLS.find((d) => d.id === t.drill) : undefined
 	const st = session.history[session.history.length - 1]
-	const tag = drill ? `COMBO DRILL · ${deckName(drill.deck)}` : t.deck ? `DECK LESSON · ${deckName(t.deck)}` : 'TUTORIAL'
+	const funList = drillsFor('fun')
+	const tag = drill?.course === 'fun' ? `FINDING THE FUN · PUZZLE ${funList.indexOf(drill) + 1}/${funList.length}` : drill ? `COMBO DRILL · ${deckName(drill.deck)}` : t.deck ? `DECK LESSON · ${deckName(t.deck)}` : 'TUTORIAL'
 	let title: string
 	let body: string
 	let button: { label: string; onClick: () => void } | null = null
@@ -483,16 +490,16 @@ function CoachPanel({ session, step, setSession, onDrill, onLessons }: { session
 	if (t.intro < pages.length) {
 		title = pages[t.intro].title
 		body = pages[t.intro].body
-		button = { label: t.intro === pages.length - 1 ? (drill ? 'Start the drill' : 'Start playing') : 'Next', onClick: () => update({ intro: t.intro + 1 }) }
+		button = { label: t.intro === pages.length - 1 ? (drill?.course === 'fun' ? 'Start the puzzle' : drill ? 'Start the drill' : 'Start playing') : 'Next', onClick: () => update({ intro: t.intro + 1 }) }
 	} else if (drill && drill.success(st, session.history[0])) {
-		const list = drillsFor(drill.deck)
+		const list = drillsFor(drill.course ?? drill.deck)
 		const next = list[list.indexOf(drill) + 1]
-		title = 'Drill complete ✓'
+		title = drill.course === 'fun' ? 'Solved ✓' : 'Drill complete ✓'
 		body = drill.lesson
 		button = next ? { label: `Next: ${next.title}`, onClick: () => onDrill(next.id) } : { label: 'Back to the lessons', onClick: onLessons }
 		extra.push({ label: 'Do it again', onClick: () => onDrill(drill.id) })
 		if (next) extra.push({ label: 'Back to the lessons', onClick: onLessons })
-	} else if (drill && (st.active !== 0 || st.pending.kind === 'over' || !step)) {
+	} else if (drill && (st.active !== 0 || st.pending.kind === 'over' || !step || drill.failed?.(st, session.history[0]))) {
 		title = 'Not quite'
 		body = `The goal was: ${drill.goal} Try again — follow the glowing hints, or try your own way.`
 		button = { label: 'Try again', onClick: () => onDrill(drill.id) }

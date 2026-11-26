@@ -15,7 +15,7 @@ export interface SetupResult {
 	online?: 'host' | 'guest'
 	seed: number
 	/** deck lessons: coached game with a deck, or one of its drills */
-	lesson?: { deck: DeckId; drill?: string }
+	lesson?: { deck: string; drill?: string }
 	/** Red Rains: a solo game against The Corpse of Viros */
 	solo?: { level: 'S' | 'H'; stage: 1 | 2 | 3 }
 }
@@ -51,7 +51,7 @@ export function Setup({ onStart, joinCode, canResume, resumeLabel, onResume, ini
 	}
 	const otherDeck = (d: string) => DECK_IDS.find((x) => x !== d) ?? d
 
-	const deckPicker = (value: string, set: (d: string) => void, label: string) => (
+	const deckPicker = (value: string, set: (d: string) => void, label: string, withChimera = false) => (
 		<div className="deckpick">
 			<div className="dp-label">{label}</div>
 			<div className="dp-row">
@@ -72,6 +72,16 @@ export function Setup({ onStart, joinCode, canResume, resumeLabel, onResume, ini
 						</button>
 					)
 				})}
+				{withChimera && (
+					<button className={`deckcard chimera ${value === 'viros' ? 'on' : ''}`} onClick={() => set('viros')}>
+						<CardFace stub="corpse-of-viros" name="The Corpse of Viros" type="Chimera" w={110} />
+						<span className="dc-name">The Corpse of Viros</span>
+						<span className="dc-deck">Red Rains chimera (solo)</span>
+						<span className="dc-magic">
+							<DieChip die={{ magic: 'rage', level: 'power' }} size={22} /> rage dice
+						</span>
+					</button>
+				)}
 			</div>
 		</div>
 	)
@@ -109,6 +119,17 @@ export function Setup({ onStart, joinCode, canResume, resumeLabel, onResume, ini
 					<label className="field">
 						Your name <input value={name0} onChange={(e) => saveName(e.target.value)} maxLength={24} />
 					</label>
+					<div className="learn-card fun">
+						<h3>Finding the fun — start here</h3>
+						<p>Seven one-turn puzzles that show what makes Ashes more than trading blows: using your side action, shaping your dice with Meditate, removing blockers before you swing, marking targets, turning your own losses into damage, going wide, starving the opponent’s dice — and bleeding the chimera. In each one the obvious attack fails; one idea wins.</p>
+						<div className="lesson-buttons">
+							{drillsFor('fun').map((dr, i) => (
+								<button key={dr.id} className={i === 0 ? 'primary' : ''} title={dr.goal} onClick={() => onStart({ decks: [dr.deck, 'arren'], names: [name0 || 'Player', 'Computer'], bot: true, level: 'normal', tutorial: true, lesson: { deck: dr.deck, drill: dr.id }, seed: seed() })}>
+									{i + 1}. {dr.title}
+								</button>
+							))}
+						</div>
+					</div>
 					<div className="learn-card">
 						<h3>Tutorial: practice game</h3>
 						<p>A coached game: you play Arren Frostpeak against the computer’s Issa Brightmore. The coach explains every step — dice, costs, attacks, blocks, reactions — and makes the suggested move glow. You can switch it off any time.</p>
@@ -152,7 +173,7 @@ export function Setup({ onStart, joinCode, canResume, resumeLabel, onResume, ini
 				<section className="panel">
 					<h2>Play the computer</h2>
 					{deckPicker(deck0, (d) => (setDeck0(d), deck1 === d && setDeck1(otherDeck(d))), 'Your deck')}
-					{deckPicker(deck1, setDeck1, 'The computer’s deck')}
+					{deckPicker(deck1, setDeck1, 'The computer’s deck', true)}
 					<div className="row">
 						<label className="field">
 							Your name <input value={name0} onChange={(e) => saveName(e.target.value)} maxLength={24} />
@@ -170,7 +191,8 @@ export function Setup({ onStart, joinCode, canResume, resumeLabel, onResume, ini
 						className="primary big"
 						onClick={() => {
 							const d1 = deck1
-							onStart({ decks: [deck0, d1], names: [name0 || 'Player', `${defOf(DECKS[d1].pb).name.split(' ')[0]} (computer)`], bot: true, level, tutorial: false, seed: seed() })
+							if (d1 === 'viros') onStart({ decks: [deck0, 'viros'], names: [name0 || 'Player', 'The Corpse of Viros'], bot: true, level, tutorial: false, seed: seed(), solo: { level: soloLevel, stage } })
+							else onStart({ decks: [deck0, d1], names: [name0 || 'Player', `${defOf(DECKS[d1].pb).name.split(' ')[0]} (computer)`], bot: true, level, tutorial: false, seed: seed() })
 						}}
 					>
 						Start
