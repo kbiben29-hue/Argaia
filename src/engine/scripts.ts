@@ -5,7 +5,7 @@ import type { Script } from './engine'
 import { FLOWS } from './flows'
 import { CARD_SCRIPTS } from './effects'
 
-export { ABILITIES, HOOKS, KEYWORDS, PLAY_CHECKS } from './effects'
+export { ABILITIES, HOOKS, KEYWORDS, PLAY_CHECKS, type Ability } from './effects'
 
 export function script(key: string): Script | undefined {
 	return FLOWS[key] ?? CARD_SCRIPTS[key]

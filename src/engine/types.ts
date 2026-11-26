@@ -4,7 +4,7 @@
 export type PlayerId = 0 | 1
 export const other = (p: PlayerId): PlayerId => (p === 0 ? 1 : 0)
 
-export type Magic = 'astral' | 'artifice' | 'natural' | 'illusion' | 'ceremonial' | 'charm' | 'divine' | 'sympathy' | 'time'
+export type Magic = 'astral' | 'artifice' | 'natural' | 'illusion' | 'ceremonial' | 'charm' | 'divine' | 'sympathy' | 'time' | 'rage'
 export type Level = 'power' | 'class' | 'basic'
 export const LEVELS: Level[] = ['power', 'class', 'basic']
 
@@ -17,6 +17,8 @@ export type CardType =
 	| 'Ready Spell'
 	| 'Alteration Spell'
 	| 'Conjured Alteration Spell'
+	| 'Chimera'
+	| 'Aspect'
 
 /** Static card data (names, types, costs, values). No rules text: abilities are scripted. */
 export interface CardDef {
@@ -24,8 +26,8 @@ export interface CardDef {
 	name: string
 	type: CardType | string
 	placement?: string
-	/** play cost as printed by the card database, e.g. ["[[main]]", "1 [[astral:class]]"] */
-	cost?: string[]
+	/** play cost as printed by the card database, e.g. ["[[main]]", "1 [[astral:class]]"]; a nested list is "either of these" */
+	cost?: (string | string[])[]
 	attack?: number | string
 	life?: number | string
 	recover?: number | string
@@ -34,6 +36,13 @@ export interface CardDef {
 	copies?: number
 	/** Phoenixborn-unique card: the Phoenixborn's name */
 	unique?: string
+	/** Red Rains aspects: blood value, who it attacks (left / right unit or the jaw = Phoenixborn), status pips */
+	blood?: number
+	aim?: 'left' | 'right' | 'jaw'
+	statusCount?: number
+	/** Red Rains chimera: printed ultimate value and threat */
+	ultimate?: number
+	threat?: number
 }
 
 export interface Die {
@@ -46,7 +55,7 @@ export interface Die {
 	on?: number
 }
 
-export type Zone = 'deck' | 'hand' | 'discard' | 'battlefield' | 'spellboard' | 'attached' | 'conj' | 'pb' | 'stack'
+export type Zone = 'deck' | 'hand' | 'discard' | 'battlefield' | 'spellboard' | 'attached' | 'conj' | 'pb' | 'stack' | 'under' | 'threat'
 
 /** One physical card. Phoenixborn, units, spells and conjurations are all instances. */
 export interface Inst {
@@ -61,6 +70,13 @@ export interface Inst {
 	alts: number[]
 	/** for an attached alteration: the unit it's under */
 	host?: number
+	/** a unit on someone else's battlefield (e.g. a Blood Puppet placed on the opponent's side) */
+	ctl?: PlayerId
+	/** allies face down under a mount conjuration */
+	under?: number[]
+	/** who last dealt damage to (or destroyed) this card, and how: for "destroyed as a result of…" */
+	hitBy?: PlayerId
+	hitKind?: 'attack' | 'counter' | 'effect'
 }
 
 export interface PlayerState {
@@ -79,6 +95,8 @@ export interface PlayerState {
 	guarded: boolean
 	/** one reaction per player per turn */
 	reacted: boolean
+	/** once-per-turn abilities used this turn (e.g. Jessa's Screams of the Departed) */
+	once?: string[]
 }
 
 export interface ChoiceOption {
@@ -117,11 +135,34 @@ export type Pending =
 
 /** A lasting effect, e.g. "+2 attack for the remainder of the turn". */
 export interface Mark {
-	kind: 'attack' | 'dodge'
+	/** attack: +amount attack · dodge: astral dice stay · kw: the unit has keyword `kw` · doom: destroy at end of turn */
+	kind: 'attack' | 'dodge' | 'kw' | 'doom'
 	uid?: number
 	player?: PlayerId
 	amount?: number
-	until: 'turn' | 'round'
+	kw?: string
+	/** 'turn' / 'round'; 'next' = until the start of `player`'s next turn */
+	until: 'turn' | 'round' | 'next'
+}
+
+/** Red Rains: the chimera's own state (it is player 1). */
+export interface SoloState {
+	chimera: PlayerId
+	level: 'S' | 'H'
+	stage: 1 | 2 | 3
+	/** blood values of the starting threat cards; its length is the printed threat */
+	setup: number[]
+	/** 1–3: column of the behaviour table and strength of the ultimate */
+	phase: 1 | 2 | 3
+	redRains: number
+	/** extra threat on top of the printed threat */
+	extraThreat: number
+	/** the aspect deck has run out once: every card discarded from it now deals 1 damage to the chimera */
+	fatigued: boolean
+	/** face-down aspects ("threat cards"), left to right */
+	threatZone: number[]
+	/** the last behaviour roll, for the UI */
+	roll?: { d12: number; text: string }
 }
 
 export type Phase = 'setup' | 'prepare' | 'turns' | 'recovery' | 'over'
@@ -144,6 +185,10 @@ export interface GameState {
 	log: string[]
 	/** set by the attack task while a battle is going on (UI arrows) */
 	attack?: { target: 'pb' | number; attackers: number[] } | null
+	/** units destroyed this turn (Bone Crow-style checks) */
+	destroyedThisTurn?: number
+	/** Red Rains solo game against a chimera */
+	solo?: SoloState
 }
 
 export type AttackTarget = 'pb' | number
@@ -158,8 +203,10 @@ export interface MeditateItem {
 
 export type Intent =
 	| { t: 'play'; player: PlayerId; card: number; dice: string[] }
-	| { t: 'activate'; player: PlayerId; card: number; dice: string[] }
-	| { t: 'dicePower'; player: PlayerId; die: string; target: number }
+	/** `ab`: which ability, for cards with more than one (index into abilitiesOf) */
+	| { t: 'activate'; player: PlayerId; card: number; dice: string[]; ab?: number }
+	/** `target` is left out for powers that don't point at a card (ceremonial, illusion, sympathy) */
+	| { t: 'dicePower'; player: PlayerId; die: string; target?: number }
 	| { t: 'meditate'; player: PlayerId; items: MeditateItem[] }
 	| { t: 'attack'; player: PlayerId; target: AttackTarget; attackers: number[] }
 	| { t: 'pass'; player: PlayerId }

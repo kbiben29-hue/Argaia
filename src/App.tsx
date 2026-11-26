@@ -361,7 +361,7 @@ export default function App() {
 			return
 		}
 		const decks: [string, string] = r.lesson ? [r.lesson.deck, rivalDeck(r.lesson.deck)] : r.decks
-		const g = newGame({ seed: r.seed, decks, names: r.names })
+		const g = newGame({ seed: r.seed, decks, names: r.names, ...(r.solo ? { soloLevel: r.solo.level, soloStage: r.solo.stage } : {}) })
 		setSession({ history: [g], bot: r.bot, level: r.level, tutorial: r.tutorial ? { intro: 0, seen: [], note: null, ...(r.lesson ? { deck: r.lesson.deck } : {}) } : undefined })
 		setViewer(0)
 		setHandoff(null)

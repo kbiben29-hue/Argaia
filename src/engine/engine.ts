@@ -9,8 +9,10 @@
 
 import { autoPay, parseCost, paysExactly, type Cost } from './dice'
 import { Rng } from './rng'
-import { script, ABILITIES, HOOKS, KEYWORDS, PLAY_CHECKS } from './scripts'
+import { script, ABILITIES, HOOKS, KEYWORDS, PLAY_CHECKS, type Ability } from './scripts'
 import { STARTER_CARDS } from '../data/starterCards'
+import { PRECON_CARDS } from '../data/preconCards'
+import { CHIMERA_CARDS, VIROS_ASPECTS, VIROS_SETUP } from '../data/chimeraCards'
 import { DECKS } from '../data/decks'
 import {
 	other,
@@ -25,31 +27,58 @@ import {
 	type PlayerState,
 	type Question,
 	type Task,
+	type Zone,
 } from './types'
 
 // ───────── card data ─────────
 
-export const CARDS: Record<string, CardDef> = { ...STARTER_CARDS }
+export const CARDS: Record<string, CardDef> = { ...STARTER_CARDS, ...PRECON_CARDS, ...CHIMERA_CARDS }
 
 export const inst = (s: GameState, uid: number): Inst => s.inst[uid]
 export const defOf = (stub: string): CardDef => CARDS[stub] ?? { stub, name: stub, type: '?' }
 export const def = (s: GameState, uid: number): CardDef => defOf(s.inst[uid].stub)
 export const nameOf = (s: GameState, uid: number) => def(s, uid).name
 export const num = (v: number | string | undefined): number => (typeof v === 'number' ? v : Number(String(v ?? '0').replace('+', '')) || 0)
-export const isUnitType = (t: string) => t === 'Ally' || t === 'Conjuration'
+export const isUnitType = (t: string) => t === 'Ally' || t === 'Conjuration' || t === 'Aspect'
 export const isUnit = (s: GameState, uid: number) => isUnitType(def(s, uid).type)
-export const hasKw = (s: GameState, uid: number, kw: string) => (KEYWORDS[s.inst[uid].stub] ?? []).includes(kw)
+export const isPbType = (t: string) => t === 'Phoenixborn' || t === 'Chimera'
+
+/**
+ * A keyword's value on a unit (0 = doesn't have it). Keywords come from the card itself
+ * (KEYWORDS, e.g. 'terrifying:1'), from attached alterations, and from lasting marks.
+ * Plain keywords ('stalk') count as 1.
+ */
+export function kwValue(s: GameState, uid: number, kw: string): number {
+	const c = s.inst[uid]
+	if (!c) return 0
+	let best = 0
+	const scan = (list: string[] | undefined) => {
+		for (const k of list ?? []) {
+			const [name, v] = k.split(':')
+			if (name === kw) best = Math.max(best, v ? Number(v) : 1)
+		}
+	}
+	scan(KEYWORDS[c.stub])
+	for (const alt of c.alts) scan(KEYWORDS[s.inst[alt].stub])
+	for (const m of s.marks) if (m.kind === 'kw' && m.uid === uid && m.kw === kw) best = Math.max(best, m.amount ?? 1)
+	// conditional keywords
+	if (kw === 'defender' && c.stub === 'iron-scales' && c.exhaust === 0) best = Math.max(best, 1)
+	return best
+}
+export const hasKw = (s: GameState, uid: number, kw: string) => kwValue(s, uid, kw) > 0
 
 // ───────── queries ─────────
 
 export function controller(s: GameState, uid: number): PlayerId {
 	const c = s.inst[uid]
 	if (c.zone === 'attached' && c.host !== undefined) return controller(s, c.host)
+	if (c.zone === 'battlefield' && c.ctl !== undefined) return c.ctl
 	return c.owner
 }
 
 export const exhausted = (s: GameState, uid: number) => s.inst[uid].exhaust > 0
 export const inPlay = (s: GameState, uid: number) => ['battlefield', 'spellboard', 'pb', 'attached'].includes(s.inst[uid]?.zone)
+export const isChimera = (s: GameState, p: PlayerId) => !!s.solo && s.solo.chimera === p
 
 export const diceOn = (s: GameState, uid: number): Die[] => s.players.flatMap((p) => p.dice.filter((d) => d.loc === 'card' && d.on === uid))
 export const astralOn = (s: GameState, uid: number) => diceOn(s, uid).find((d) => d.magic === 'astral')
@@ -70,28 +99,38 @@ export function cardsInPlay(s: GameState, p: PlayerId): number[] {
 	return [pl.pb, ...pl.battlefield, ...pl.spellboard.flat(), ...alts]
 }
 
+/** Transform N: +N to attack, life and recover while the controller doesn't hold the first player token. */
+function transform(s: GameState, uid: number): number {
+	const n = kwValue(s, uid, 'transform')
+	return n && s.phase !== 'setup' && s.first !== controller(s, uid) ? n : 0
+}
 export function attackOf(s: GameState, uid: number): number {
 	const c = s.inst[uid]
 	let a = num(def(s, uid).attack)
+	if (c.stub === 'wishing-wing') a = c.status // X = its status tokens
 	for (const alt of c.alts) a += num(def(s, alt).attack)
 	for (const m of s.marks) if (m.kind === 'attack' && m.uid === uid) a += m.amount ?? 0
+	for (const d of diceOn(s, uid)) a += d.magic === 'divine' ? 1 : d.magic === 'charm' ? -1 : 0
+	a += transform(s, uid)
 	return Math.max(0, a)
 }
 export function lifeOf(s: GameState, uid: number): number {
 	const c = s.inst[uid]
 	let l = num(def(s, uid).life)
 	for (const alt of c.alts) l += num(def(s, alt).life)
+	l += transform(s, uid)
 	return Math.max(0, l)
 }
 export function recoverOf(s: GameState, uid: number): number {
 	const c = s.inst[uid]
 	let r = num(def(s, uid).recover)
 	for (const alt of c.alts) r += num(def(s, alt).recover)
+	r += transform(s, uid)
 	return Math.max(0, r)
 }
 export const battlefieldSize = (s: GameState, p: PlayerId) => num(def(s, s.players[p].pb).battlefield)
 export const spellboardSize = (s: GameState, p: PlayerId) => num(def(s, s.players[p].pb).spellboard)
-export const pbLife = (s: GameState, p: PlayerId) => num(def(s, s.players[p].pb).life)
+export const pbLife = (s: GameState, p: PlayerId) => (isChimera(s, p) && s.solo!.level === 'H' ? 35 : num(def(s, s.players[p].pb).life))
 export const pbLeft = (s: GameState, p: PlayerId) => pbLife(s, p) - s.inst[s.players[p].pb].wounds
 
 /** Who has to do something now (null when the game is over). */
@@ -103,12 +142,54 @@ export function playCost(s: GameState, uid: number): Cost {
 	return parseCost(def(s, uid).cost)
 }
 
+/** Which action a "main or side" cost uses right now. */
+export function resolveActions(s: GameState, c: Cost): { main: boolean; side: boolean } {
+	if (!c.mainOrSide) return { main: c.main, side: c.side }
+	return s.turn.side ? { main: true, side: c.side } : { main: c.main, side: true }
+}
+function actionProblem(s: GameState, c: Cost): string | null {
+	if (c.mainOrSide && s.turn.main && s.turn.side) return 'You’ve used both your actions this turn'
+	const a = resolveActions(s, c)
+	if (a.main && s.turn.main) return 'You’ve used your main action this turn'
+	if (a.side && s.turn.side) return 'You’ve used your side action this turn'
+	return null
+}
+
+/** The activated abilities a card has (most have one; a few have two, e.g. Drain Vitality). */
+export function abilitiesOf(s: GameState, uid: number): Ability[] {
+	const st = s.inst[uid]?.stub
+	if (!st) return []
+	const out: Ability[] = []
+	if (ABILITIES[st]) out.push(ABILITIES[st])
+	if (ABILITIES[`${st}#2`]) out.push(ABILITIES[`${st}#2`])
+	return out
+}
+/** How many times a ready spell is focused: the other copies stacked with it. */
+export function focusOf(s: GameState, uid: number): number {
+	const c = s.inst[uid]
+	if (c?.zone !== 'spellboard') return 0
+	const st = s.players[c.owner].spellboard.find((x) => x.includes(uid))
+	return st ? st.length - 1 : 0
+}
+
 /** Can this unit attack at all right now (ignoring whose turn it is)? */
 export function canAttackWith(s: GameState, uid: number): boolean {
 	if (!isUnit(s, uid) || s.inst[uid].zone !== 'battlefield' || exhausted(s, uid)) return false
 	if (hasKw(s, uid, 'dormant') && charge(s, uid) === 0) return false
 	return true
 }
+
+/** Can unit `u` block or guard against attacker `a`? (Terrifying, Gigantic) */
+export function canDefendAgainst(s: GameState, u: number, a: number): boolean {
+	const terr = kwValue(s, a, 'terrifying')
+	if (terr && attackOf(s, u) <= terr) return false
+	const gig = kwValue(s, a, 'gigantic')
+	if (gig && lifeOf(s, u) <= gig) return false
+	return true
+}
+
+/** Status tokens: units with fewer than this many are refilled in recovery (aspects) — and the time die. */
+export const statusOf = (s: GameState, uid: number) => s.inst[uid].status
 
 // ───────── state changes used by flows and card scripts ─────────
 
@@ -118,6 +199,10 @@ export function log(s: GameState, line: string) {
 }
 
 export function drawCards(s: GameState, p: PlayerId, n: number): number {
+	if (isChimera(s, p)) {
+		for (let k = 0; k < n; k++) chimeraDiscardTop(s)
+		return 0
+	}
 	const pl = s.players[p]
 	let k = 0
 	for (; k < n && pl.deck.length > 0; k++) {
@@ -139,6 +224,10 @@ function resetCard(c: Inst) {
 	c.status = 0
 	c.alts = []
 	c.host = undefined
+	c.ctl = undefined
+	c.under = undefined
+	c.hitBy = undefined
+	c.hitKind = undefined
 }
 
 const removeFrom = (arr: number[], uid: number) => {
@@ -151,7 +240,20 @@ function sendTo(s: GameState, uid: number, dest: 'discard' | 'hand' | 'deckTop')
 	const c = s.inst[uid]
 	const pl = s.players[c.owner]
 	const t = def(s, uid).type
+	const wasInPlay = c.zone === 'battlefield'
 	resetCard(c)
+	if (t === 'Aspect') {
+		c.zone = 'discard'
+		pl.discard.push(uid)
+		// an aspect leaving play (destroyed or discarded) wounds the chimera by its blood value
+		if (wasInPlay && s.solo) {
+			const blood = num(defOf(c.stub).blood)
+			s.inst[pl.pb].wounds += blood
+			log(s, `${defOf(c.stub).name} bleeds the chimera: ${blood} damage.`)
+			checkPhoenixborn(s)
+		}
+		return
+	}
 	if (t === 'Conjuration' || t === 'Conjured Alteration Spell') {
 		c.zone = 'conj'
 		pl.conj.push(uid)
@@ -176,7 +278,16 @@ export function leavePlay(s: GameState, uid: number, dest: 'discard' | 'hand' = 
 		sendTo(s, alt, dest)
 	}
 	c.alts = []
-	if (c.zone === 'battlefield') removeFrom(s.players[c.owner].battlefield, uid)
+	for (const al of c.under ?? []) {
+		// allies under a mount go to their owner's discard (Dismount moves them on to hand)
+		s.inst[al].zone = 'discard'
+		s.players[s.inst[al].owner].discard.push(al)
+	}
+	c.under = undefined
+	if (c.zone === 'battlefield') {
+		removeFrom(s.players[0].battlefield, uid)
+		removeFrom(s.players[1].battlefield, uid)
+	}
 	else if (c.zone === 'spellboard') {
 		const pl = s.players[c.owner]
 		for (const st of pl.spellboard) removeFrom(st, uid)
@@ -197,17 +308,68 @@ export function discardFromHand(s: GameState, uid: number) {
 export function placeUnit(s: GameState, p: PlayerId, uid: number): boolean {
 	const pl = s.players[p]
 	const c = s.inst[uid]
-	removeFrom(pl.hand, uid)
-	removeFrom(pl.conj, uid)
+	const own = s.players[c.owner]
+	removeFrom(own.hand, uid)
+	removeFrom(own.conj, uid)
+	removeFrom(own.discard, uid)
 	if (pl.battlefield.length >= battlefieldSize(s, p)) {
-		log(s, `${pl.name}'s battlefield is full — ${nameOf(s, uid)} is discarded.`)
+		log(s, `${pl.name}'s battlefield is full — ${nameOf(s, uid)} can’t come into play.`)
 		sendTo(s, uid, 'discard')
 		return false
 	}
 	resetCard(c)
 	c.zone = 'battlefield'
+	if (p !== c.owner) c.ctl = p
 	pl.battlefield.push(uid)
 	return true
+}
+
+/** Move a card to a zone of its owner's (used by searches and "return to hand" effects). */
+export function moveCard(s: GameState, uid: number, to: Extract<Zone, 'hand' | 'deck' | 'discard'>, bottom = false) {
+	const c = s.inst[uid]
+	const pl = s.players[c.owner]
+	removeFrom(pl.hand, uid)
+	removeFrom(pl.deck, uid)
+	removeFrom(pl.discard, uid)
+	c.zone = to
+	if (to === 'hand') pl.hand.push(uid)
+	else if (to === 'discard') pl.discard.push(uid)
+	else if (bottom) pl.deck.push(uid)
+	else pl.deck.unshift(uid)
+}
+
+/** The chimera "draws" by discarding the top of its aspect deck (once fatigued, each costs it 1 wound). */
+export function chimeraDiscardTop(s: GameState) {
+	const p = s.solo!.chimera
+	const pl = s.players[p]
+	if (pl.deck.length === 0) refillChimeraDeck(s)
+	const top = pl.deck.shift()
+	if (top === undefined) return
+	s.inst[top].zone = 'discard'
+	pl.discard.push(top)
+	log(s, `The chimera discards ${nameOf(s, top)} from its aspect deck.`)
+	if (s.solo!.fatigued) {
+		s.inst[pl.pb].wounds += 1
+		log(s, 'The fatigued chimera takes 1 damage.')
+		checkPhoenixborn(s)
+	}
+	if (pl.deck.length === 0) refillChimeraDeck(s)
+}
+/** Out of aspects: the chimera becomes fatigued and shuffles its discard pile back in. */
+export function refillChimeraDeck(s: GameState) {
+	const p = s.solo!.chimera
+	const pl = s.players[p]
+	if (!s.solo!.fatigued) {
+		s.solo!.fatigued = true
+		log(s, 'The chimera’s aspect deck has run out — it is fatigued!')
+	}
+	if (pl.discard.length === 0) return
+	withRng(s, (r) => {
+		pl.deck = r.shuffle(pl.discard.slice())
+	})
+	pl.discard = []
+	for (const u of pl.deck) s.inst[u].zone = 'deck'
+	log(s, 'The chimera shuffles its discard pile into a new aspect deck.')
 }
 
 export function placeReadySpell(s: GameState, p: PlayerId, uid: number) {
@@ -252,6 +414,14 @@ export class GameOver {
 	constructor(public winner: PlayerId | null) {}
 }
 
+export interface DamageOpts {
+	/** who is dealing it (default: the task's owner) */
+	by?: PlayerId
+	kind?: 'attack' | 'counter' | 'effect'
+	/** can't be prevented (Law of Domination) */
+	unpreventable?: boolean
+}
+
 export interface Ctx {
 	s: GameState
 	owner: PlayerId
@@ -280,6 +450,12 @@ function runTask(s: GameState, task: Task): { state: GameState } | { need: NeedC
 			if (q.options.length === 0) return []
 			if (q.options.length === 1 && q.min >= 1) return [q.options[0].id]
 			if (q.min === q.max && q.options.length === q.min) return q.options.map((o) => o.id)
+			// the chimera never thinks: it takes the best-scored options
+			if (clone.solo && player === clone.solo.chimera) {
+				const ranked = q.options.slice().sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+				const n = Math.max(q.min, Math.min(q.max, ranked.filter((o) => (o.score ?? 0) > 0).length))
+				return ranked.slice(0, n).map((o) => o.id)
+			}
 			const a = task.answers[i++]
 			if (a) return a
 			throw new NeedChoice(player, q)
@@ -319,30 +495,68 @@ function settle(s: GameState): GameState {
 			endTurn(s)
 			return settle(s)
 		}
+		if (isChimera(s, s.active)) {
+			queue(s, 'chimeraTurn', s.active)
+			return settle(s)
+		}
 		s.pending = { kind: 'act', player: s.active }
 	}
 	return s
 }
 
-/** Damage pipeline: reactions (Barrier), astral dice, wound tokens, Phoenixborn defeat. Returns wounds placed. */
-export function dealDamage(c: Ctx, target: number, amount: number): number {
+/**
+ * Damage pipeline: Redirect, preventing reactions (Barrier, Bravery), Armored, Iron Scales, astral
+ * dice, Hunter's Mark (double wounds), wound tokens, Phoenixborn defeat. Returns wounds placed.
+ */
+export function dealDamage(c: Ctx, target: number, amount: number, o: DamageOpts = {}): number {
 	const s = c.s
 	if (amount <= 0 || !inPlay(s, target)) return 0
+	target = HOOKS.redirect(c, target, amount)
 	const ctl = controller(s, target)
 	let amt = amount
-	amt = Math.max(0, amt - HOOKS.damaged(c, target, amt))
-	const astral = astralOn(s, target)
-	if (astral && amt > 0) {
-		amt -= 1
-		const keep = s.marks.some((m) => m.kind === 'dodge' && m.player === ctl)
-		if (!keep) moveDie(astral, 'exhausted')
-		log(s, `An astral die on ${nameOf(s, target)} prevents 1 damage${keep ? '' : ' and is exhausted'}.`)
+	const t = s.inst[target]
+	t.hitBy = o.by ?? c.owner
+	t.hitKind = o.kind ?? 'effect'
+	if (!o.unpreventable) {
+		amt = Math.max(0, amt - HOOKS.damaged(c, target, amt))
+		const armored = kwValue(s, target, 'armored')
+		if (armored && amt > 0) {
+			const n = Math.min(armored, amt)
+			amt -= n
+			log(s, `Armored: ${nameOf(s, target)} prevents ${n} damage.`)
+		}
+		if (t.stub === 'iron-scales' && amt > 1) {
+			log(s, `Iron Scales reduces the damage to 1.`)
+			amt = 1
+		}
+		const astral = astralOn(s, target)
+		if (astral && amt > 0) {
+			amt -= 1
+			const keep = s.marks.some((m) => m.kind === 'dodge' && m.player === ctl)
+			if (!keep) moveDie(astral, 'exhausted')
+			log(s, `An astral die on ${nameOf(s, target)} prevents 1 damage${keep ? '' : ' and is exhausted'}.`)
+		}
 	}
 	if (amt <= 0) return 0
-	s.inst[target].wounds += amt
+	let wounds = amt
+	if (t.alts.some((a) => s.inst[a].stub === 'hunters-mark')) {
+		wounds *= 2
+		log(s, `Hunter's Mark doubles the wounds.`)
+	}
+	t.wounds += wounds
 	log(s, `${nameOf(s, target)} takes ${amt} damage.`)
-	if (s.inst[target].zone === 'pb') checkPhoenixborn(s)
-	return amt
+	if (t.zone === 'pb') checkPhoenixborn(s)
+	return wounds
+}
+
+/** Destroy a unit outright (an effect, not damage). */
+export function destroyUnit(c: Ctx, uid: number, by: PlayerId = c.owner) {
+	const t = c.s.inst[uid]
+	if (!t || t.zone !== 'battlefield') return
+	t.hitBy = by
+	t.hitKind = 'effect'
+	t.wounds = Math.max(t.wounds, lifeOf(c.s, uid))
+	checkDestroyed(c.s, c)
 }
 
 export function checkPhoenixborn(s: GameState) {
@@ -353,25 +567,68 @@ export function checkPhoenixborn(s: GameState) {
 	throw new GameOver(winner)
 }
 
-/** Destroy every unit whose wounds reach its life. Returns the destroyed uids. */
-export function checkDestroyed(s: GameState): number[] {
-	const out: number[] = []
+/** What we know about a unit at the moment it was destroyed (it has already left play). */
+export interface Destroyed {
+	uid: number
+	stub: string
+	owner: PlayerId
+	ctl: PlayerId
+	type: string
+	recover: number
+	printedLife: number
+	status: number
+	alts: { uid: number; stub: string; owner: PlayerId }[]
+	under: number[]
+	by?: PlayerId
+	kind?: 'attack' | 'counter' | 'effect'
+}
+
+/**
+ * Destroy every unit whose wounds reach its life. With a task context, "when destroyed" effects
+ * and reactions (Final Cry, Screams of the Departed…) run right away. Returns the destroyed uids.
+ */
+export function checkDestroyed(s: GameState, c?: Ctx): number[] {
+	const out: Destroyed[] = []
 	for (const p of [s.active, other(s.active)] as PlayerId[])
 		for (const u of s.players[p].battlefield.slice())
 			if (s.inst[u].wounds >= lifeOf(s, u)) {
+				const t = s.inst[u]
+				out.push({
+					uid: u,
+					stub: t.stub,
+					owner: t.owner,
+					ctl: controller(s, u),
+					type: def(s, u).type,
+					recover: num(def(s, u).recover),
+					printedLife: num(def(s, u).life),
+					status: t.status,
+					alts: t.alts.map((a) => ({ uid: a, stub: s.inst[a].stub, owner: s.inst[a].owner })),
+					under: (t.under ?? []).slice(),
+					by: t.hitBy,
+					kind: t.hitKind,
+				})
 				log(s, `${nameOf(s, u)} is destroyed.`)
 				leavePlay(s, u, 'discard')
-				out.push(u)
+				s.destroyedThisTurn = (s.destroyedThisTurn ?? 0) + 1
 			}
-	return out
+	if (c && out.length) HOOKS.destroyed(c, out)
+	return out.map((d) => d.uid)
 }
 
 // ───────── turns ─────────
 
 function endTurn(s: GameState) {
+	for (const m of s.marks)
+		if (m.kind === 'doom' && m.uid !== undefined && s.inst[m.uid]?.zone === 'battlefield') {
+			log(s, `${nameOf(s, m.uid)} (a duplicate) is destroyed at the end of the turn.`)
+			leavePlay(s, m.uid, 'discard')
+		}
 	s.marks = s.marks.filter((m) => m.until !== 'turn')
 	s.players[0].reacted = false
 	s.players[1].reacted = false
+	s.players[0].once = []
+	s.players[1].once = []
+	s.destroyedThisTurn = 0
 	if (s.turn.passed && s.lastPassed) {
 		s.phase = 'recovery'
 		s.turn = { main: false, side: false, passed: false }
@@ -382,18 +639,26 @@ function endTurn(s: GameState) {
 	s.lastPassed = s.turn.passed
 	s.active = other(s.active)
 	s.turn = { main: false, side: false, passed: false }
+	// "until the start of your next turn"
+	s.marks = s.marks.filter((m) => !(m.until === 'next' && m.player === s.active))
 }
 
 // ───────── new game ─────────
 
 export interface NewGameOpts {
 	seed: number
+	/** deck id 'viros' for seat 1 = Red Rains solo game against The Corpse of Viros */
 	decks: [DeckList, DeckList] | [string, string]
 	names: [string, string]
+	/** Red Rains difficulty: Standard or Heroic, stage 1–3 */
+	soloLevel?: 'S' | 'H'
+	soloStage?: 1 | 2 | 3
 }
 
+export const VIROS_DECK: DeckList = { id: 'viros', name: 'The Corpse of Viros', pb: 'corpse-of-viros', cards: VIROS_ASPECTS, conj: [], dice: [{ magic: 'rage', count: 5 }], firstFive: [] }
+
 export function newGame(o: NewGameOpts): GameState {
-	const decks = o.decks.map((d) => (typeof d === 'string' ? DECKS[d] : d)) as [DeckList, DeckList]
+	const decks = o.decks.map((d) => (typeof d === 'string' ? (d === 'viros' ? VIROS_DECK : DECKS[d]) : d)) as [DeckList, DeckList]
 	const s: GameState = {
 		rng: o.seed >>> 0 || 1,
 		round: 1,
@@ -418,7 +683,8 @@ export function newGame(o: NewGameOpts): GameState {
 	for (const p of [0, 1] as PlayerId[]) {
 		const d = decks[p]
 		let n = 0
-		const dice: Die[] = d.dice.flatMap((x) => Array.from({ length: x.count }, () => ({ id: `${p}d${n++}`, magic: x.magic, level: 'basic' as Level, owner: p, loc: 'exhausted' as const })))
+		const rage = d.id === 'viros'
+		const dice: Die[] = d.dice.flatMap((x) => Array.from({ length: x.count }, () => ({ id: `${p}d${n++}`, magic: x.magic, level: 'basic' as Level, owner: p, loc: (rage ? 'active' : 'exhausted') as Die['loc'] })))
 		s.players[p] = {
 			name: o.names[p],
 			deckId: d.id,
@@ -433,6 +699,10 @@ export function newGame(o: NewGameOpts): GameState {
 			guarded: false,
 			reacted: false,
 		}
+	}
+	if (decks[1].id === 'viros') {
+		const key = `${o.soloLevel ?? 'S'}${o.soloStage ?? 1}`
+		s.solo = { chimera: 1, level: o.soloLevel ?? 'S', stage: o.soloStage ?? 1, setup: VIROS_SETUP[key] ?? VIROS_SETUP.S1, phase: 1, redRains: 0, extraThreat: 0, fatigued: false, threatZone: [] }
 	}
 	log(s, `${o.names[0]} (${nameOf(s, s.players[0].pb)}) vs ${o.names[1]} (${nameOf(s, s.players[1].pb)}).`)
 	queue(s, 'setup', 0)
@@ -469,8 +739,8 @@ export function playProblem(s: GameState, p: PlayerId, uid: number): string | nu
 	const d = def(s, uid)
 	if (d.type === 'Reaction Spell') return 'Reaction spells are played when their trigger happens'
 	const cost = playCost(s, uid)
-	if (cost.main && s.turn.main) return 'You’ve used your main action this turn'
-	if (cost.side && s.turn.side) return 'You’ve used your side action this turn'
+	const act = actionProblem(s, cost)
+	if (act) return act
 	if (cost.magic.length > activeDice(s, p).length) return 'Not enough dice'
 	if (cost.discard > s.players[p].hand.length - 1) return 'Not enough other cards to discard'
 	if (d.type === 'Ally' && units(s, p).length >= battlefieldSize(s, p)) return 'Your battlefield is full'
@@ -485,24 +755,43 @@ export function playProblem(s: GameState, p: PlayerId, uid: number): string | nu
 	return null
 }
 
-export function abilityProblem(s: GameState, p: PlayerId, uid: number): string | null {
+export function abilityProblem(s: GameState, p: PlayerId, uid: number, which = 0): string | null {
 	const t = turnProblem(s, p)
 	if (t) return t
 	const c = s.inst[uid]
-	const ab = c && ABILITIES[c.stub]
+	const ab = c && abilitiesOf(s, uid)[which]
 	if (!ab) return 'That card has no ability to use'
 	if (!inPlay(s, uid) || controller(s, uid) !== p) return 'You don’t control that card'
-	if (exhausted(s, uid)) return 'That card is exhausted'
-	if (ab.cost.main && s.turn.main) return 'You’ve used your main action this turn'
-	if (ab.cost.side && s.turn.side) return 'You’ve used your side action this turn'
+	if (exhausted(s, uid)) return isPbType(def(s, uid).type) ? 'Your Phoenixborn is exhausted' : 'That card is exhausted'
+	const act = actionProblem(s, ab.cost)
+	if (act) return act
 	if (ab.cost.magic.length > activeDice(s, p).length) return 'Not enough dice'
 	return ab.check?.(s, p, uid) ?? null
 }
 
+/** Dice powers that don't point at a card (they ask their questions while resolving). */
+export const POWER_NO_TARGET: Die['magic'][] = ['ceremonial', 'illusion', 'sympathy']
+
+/** What a dice power can be pointed at. */
 export function dicePowerTargets(s: GameState, p: PlayerId, d: Die): number[] {
-	if (d.magic === 'astral') return [s.players[p].pb, ...units(s, p)].filter((u) => !astralOn(s, u))
-	if (d.magic === 'artifice') return cardsInPlay(s, p).filter((u) => s.inst[u].zone !== 'attached')
-	return []
+	const foe = other(p)
+	const has = (u: number, m: string) => diceOn(s, u).some((x) => x.magic === m)
+	switch (d.magic) {
+		case 'astral':
+			return [s.players[p].pb, ...units(s, p)].filter((u) => !astralOn(s, u))
+		case 'artifice':
+			return cardsInPlay(s, p).filter((u) => s.inst[u].zone !== 'attached')
+		case 'natural':
+			return [...units(s, p), ...units(s, foe)]
+		case 'charm':
+			return units(s, foe).filter((u) => !has(u, 'charm'))
+		case 'divine':
+			return units(s, p).filter((u) => !has(u, 'divine'))
+		case 'time':
+			return units(s, p)
+		default:
+			return []
+	}
 }
 
 export function dicePowerProblem(s: GameState, p: PlayerId, dieId: string, target?: number): string | null {
@@ -512,9 +801,16 @@ export function dicePowerProblem(s: GameState, p: PlayerId, dieId: string, targe
 	const d = findDie(s, dieId)
 	if (!d || d.owner !== p || d.loc !== 'active') return 'Pick one of your active dice'
 	if (d.level !== 'power') return 'Only a die showing its power symbol has a dice power'
+	if (POWER_NO_TARGET.includes(d.magic)) {
+		if (d.magic === 'ceremonial' && !s.players[p].discard.some((u) => def(s, u).type === 'Ally')) return 'No ally in your discard pile to return'
+		if (d.magic === 'illusion' && activeDice(s, other(p)).length === 0) return 'Your opponent has no active dice to lower'
+		if (d.magic === 'sympathy' && s.players[p].deck.length === 0) return 'Your draw pile is empty'
+		return null
+	}
 	const targets = dicePowerTargets(s, p, d)
-	if (targets.length === 0) return 'No card to place the die on'
-	if (target !== undefined && !targets.includes(target)) return d.magic === 'astral' ? 'Place it on a unit or Phoenixborn you control without an astral die' : 'Place it on a card you control'
+	if (targets.length === 0) return d.magic === 'charm' ? 'No opposing unit without a charm die' : 'No card to use it on'
+	if (target === undefined) return 'Choose a card for this dice power'
+	if (!targets.includes(target)) return 'That card isn’t a legal target for this dice power'
 	return null
 }
 
@@ -527,10 +823,12 @@ export function attackProblem(s: GameState, p: PlayerId, target: number | 'pb', 
 	for (const a of attackers) {
 		if (!s.inst[a] || s.inst[a].zone !== 'battlefield' || controller(s, a) !== p) return 'Attack with your own units'
 		if (exhausted(s, a)) return `${nameOf(s, a)} is exhausted`
+		if (def(s, a).type === 'Aspect' && !isChimera(s, p)) return 'That’s the chimera’s'
 		if (!canAttackWith(s, a)) return `${nameOf(s, a)} can’t attack unless it’s charged`
 	}
 	if (target !== 'pb') {
 		if (!s.inst[target] || s.inst[target].zone !== 'battlefield' || controller(s, target) === p) return 'Attack an opponent’s unit'
+		if (s.marks.some((m) => m.kind === 'kw' && m.kw === 'shroud' && m.uid === target)) return 'That unit can’t be attacked right now'
 		if (attackers.length !== 1) return 'Only one unit can attack a unit'
 	}
 	return null
@@ -582,8 +880,9 @@ export function apply(input: GameState, i: Intent): GameState {
 			if (prob) fail(prob)
 			const cost = playCost(s, i.card)
 			payDice(s, p, i.dice, cost.magic)
-			if (cost.main) s.turn.main = true
-			if (cost.side) s.turn.side = true
+			const acts = resolveActions(s, cost)
+			if (acts.main) s.turn.main = true
+			if (acts.side) s.turn.side = true
 			const pl = s.players[p]
 			removeFrom(pl.hand, i.card)
 			s.inst[i.card].zone = 'stack' // resolving: not in hand, not yet in play
@@ -592,24 +891,32 @@ export function apply(input: GameState, i: Intent): GameState {
 			return settle(s)
 		}
 		case 'activate': {
-			const prob = abilityProblem(s, p, i.card)
+			const which = i.ab ?? 0
+			const prob = abilityProblem(s, p, i.card, which)
 			if (prob) fail(prob)
-			const ab = ABILITIES[s.inst[i.card].stub]
+			const ab = abilitiesOf(s, i.card)[which]
 			payDice(s, p, i.dice, ab.cost.magic)
-			if (ab.cost.main) s.turn.main = true
-			if (ab.cost.side) s.turn.side = true
+			const acts = resolveActions(s, ab.cost)
+			if (acts.main) s.turn.main = true
+			if (acts.side) s.turn.side = true
 			if (ab.cost.exhaust) s.inst[i.card].exhaust += 1
 			log(s, `${s.players[p].name} uses ${nameOf(s, i.card)}: ${ab.label}.`)
-			queue(s, 'ability', p, { uid: i.card })
+			queue(s, 'ability', p, { uid: i.card, ab: which })
 			return settle(s)
 		}
 		case 'dicePower': {
 			const prob = dicePowerProblem(s, p, i.die, i.target)
 			if (prob) fail(prob)
 			const d = findDie(s, i.die)!
-			moveDie(d, 'card', i.target)
 			s.turn.side = true
-			log(s, `${s.players[p].name} uses an ${d.magic} dice power: the die goes on ${nameOf(s, i.target)}.`)
+			if (['astral', 'artifice', 'charm', 'divine'].includes(d.magic)) {
+				moveDie(d, 'card', i.target)
+				log(s, `${s.players[p].name} uses ${d.magic === 'astral' || d.magic === 'artifice' ? 'an' : 'a'} ${d.magic} dice power: the die goes on ${nameOf(s, i.target!)}.`)
+			} else {
+				moveDie(d, 'exhausted')
+				log(s, `${s.players[p].name} uses a ${d.magic} dice power${i.target !== undefined ? ` on ${nameOf(s, i.target)}` : ''}.`)
+				queue(s, 'dicePower', p, { die: d.id, magic: d.magic, target: i.target })
+			}
 			return settle(s)
 		}
 		case 'meditate': {
@@ -632,6 +939,7 @@ export function apply(input: GameState, i: Intent): GameState {
 					const c = s.inst[it.card!]
 					if (it.from === 'hand' && (c?.zone !== 'hand' || c.owner !== p)) fail('Discard a card from your hand')
 					if (it.from === 'spell' && (c?.zone !== 'spellboard' || c.owner !== p)) fail('Discard one of your ready spells')
+					if (it.from === 'spell' && c.stub === 'law-of-domination') fail('Law of Domination is Bound: it can’t be discarded to meditate')
 				}
 			}
 			for (const it of i.items) {
@@ -661,6 +969,7 @@ export function apply(input: GameState, i: Intent): GameState {
 			s.turn.main = true
 			s.turn.passed = true
 			log(s, `${s.players[p].name} passes.`)
+			if (s.solo && !isChimera(s, p) && s.solo.threatZone.length > 0) queue(s, 'chimeraOnPass', other(p))
 			return settle(s)
 		}
 		case 'forfeit': {
@@ -687,8 +996,8 @@ export function apply(input: GameState, i: Intent): GameState {
 			}
 			const what = { 'wound+': 'adds a wound to', 'wound-': 'removes a wound from', 'exhaust+': 'exhausts', 'exhaust-': 'readies', discard: 'discards', hand: 'returns to hand' }[i.op]
 			log(s, `Manual fix: ${who} ${what} ${name}.`)
-			checkDestroyed(s)
 			try {
+				checkDestroyed(s)
 				checkPhoenixborn(s)
 			} catch (e) {
 				if (!(e instanceof GameOver)) throw e

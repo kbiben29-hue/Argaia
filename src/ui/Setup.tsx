@@ -16,9 +16,11 @@ export interface SetupResult {
 	seed: number
 	/** deck lessons: coached game with a deck, or one of its drills */
 	lesson?: { deck: DeckId; drill?: string }
+	/** Red Rains: a solo game against The Corpse of Viros */
+	solo?: { level: 'S' | 'H'; stage: 1 | 2 | 3 }
 }
 
-type Tab = 'computer' | 'hotseat' | 'friend' | 'learn'
+type Tab = 'computer' | 'hotseat' | 'friend' | 'redrains' | 'learn'
 
 const NAME_KEY = 'argaia.name'
 const readName = () => {
@@ -36,6 +38,8 @@ export function Setup({ onStart, joinCode, canResume, resumeLabel, onResume, ini
 	const [name0, setName0] = useState(readName)
 	const [name1, setName1] = useState('Player 2')
 	const [level, setLevel] = useState<BotLevel>('normal')
+	const [soloLevel, setSoloLevel] = useState<'S' | 'H'>('S')
+	const [stage, setStage] = useState<1 | 2 | 3>(1)
 	const seed = () => (Date.now() ^ Math.floor(Math.random() * 1e9)) >>> 0
 	const saveName = (n: string) => {
 		setName0(n)
@@ -59,11 +63,11 @@ export function Setup({ onStart, joinCode, canResume, resumeLabel, onResume, ini
 							<CardFace stub={d.pb} name={pb.name} type="Phoenixborn" w={110} />
 							<span className="dc-name">{pb.name}</span>
 							<span className="dc-deck">{d.name}</span>
-							<span className={`dc-magic mg-${d.dice[0].magic}`}>
-								<DieChip die={{ magic: d.dice[0].magic, level: 'power' }} size={22} />
-								<DieChip die={{ magic: d.dice[0].magic, level: 'class' }} size={22} />
-								<DieChip die={{ magic: d.dice[0].magic, level: 'basic' }} size={22} />
-								{d.dice[0].magic} dice
+							<span className="dc-magic">
+								{d.dice.map((x) => (
+									<DieChip key={x.magic} die={{ magic: x.magic, level: 'power' }} size={22} />
+								))}
+								{d.dice.map((x) => x.magic).join(' + ')}
 							</span>
 						</button>
 					)
@@ -76,7 +80,7 @@ export function Setup({ onStart, joinCode, canResume, resumeLabel, onResume, ini
 		<div className="home">
 			<header className="home-head">
 				<div className="logo">ARGAIA</div>
-				<div className="tagline">A table for Ashes: Rise of the Phoenixborn — Ascendancy starter decks</div>
+				<div className="tagline">A table for Ashes: Rise of the Phoenixborn — six decks, every magic type, and Red Rains</div>
 			</header>
 			{canResume && (
 				<button className="resume primary" onClick={onResume}>
@@ -89,6 +93,7 @@ export function Setup({ onStart, joinCode, canResume, resumeLabel, onResume, ini
 						['computer', 'Vs computer'],
 						['hotseat', 'Two players'],
 						['friend', 'Play a friend'],
+						['redrains', 'Red Rains'],
 						['learn', 'Learn'],
 					] as [Tab, string][]
 				).map(([k, label]) => (
@@ -146,7 +151,8 @@ export function Setup({ onStart, joinCode, canResume, resumeLabel, onResume, ini
 			{tab === 'computer' && (
 				<section className="panel">
 					<h2>Play the computer</h2>
-					{deckPicker(deck0, setDeck0, 'Your deck')}
+					{deckPicker(deck0, (d) => (setDeck0(d), deck1 === d && setDeck1(otherDeck(d))), 'Your deck')}
+					{deckPicker(deck1, setDeck1, 'The computer’s deck')}
 					<div className="row">
 						<label className="field">
 							Your name <input value={name0} onChange={(e) => saveName(e.target.value)} maxLength={24} />
@@ -163,7 +169,7 @@ export function Setup({ onStart, joinCode, canResume, resumeLabel, onResume, ini
 					<button
 						className="primary big"
 						onClick={() => {
-							const d1 = otherDeck(deck0)
+							const d1 = deck1
 							onStart({ decks: [deck0, d1], names: [name0 || 'Player', `${defOf(DECKS[d1].pb).name.split(' ')[0]} (computer)`], bot: true, level, tutorial: false, seed: seed() })
 						}}
 					>
@@ -200,6 +206,42 @@ export function Setup({ onStart, joinCode, canResume, resumeLabel, onResume, ini
 					</label>
 					<button className="primary big" onClick={() => onStart({ decks: [deck0, otherDeck(deck0)], names: [name0 || 'Player', 'Friend'], bot: false, level, tutorial: false, online: joinCode ? 'guest' : 'host', seed: seed() })}>
 						{joinCode ? 'Join game' : 'Create invite link'}
+					</button>
+				</section>
+			)}
+
+			{tab === 'redrains' && (
+				<section className="panel">
+					<h2>Red Rains: The Corpse of Viros</h2>
+					<p className="dim">A solo game against a chimera. It plays itself: each turn it rolls on its behaviour table, reveals face-down aspects and attacks. Rage dice and Red Rains tokens build towards its ultimate, which hits all your cards and pushes it into its next phase. Destroying an aspect wounds it by the aspect’s blood value — wear it down to 0 to win.</p>
+					<div className="viros-row">
+						<CardFace stub="corpse-of-viros" name="The Corpse of Viros" type="Chimera" w={150} />
+						<div>
+							{deckPicker(deck0, setDeck0, 'Your deck')}
+							<div className="row">
+								<label className="field">
+									Your name <input value={name0} onChange={(e) => saveName(e.target.value)} maxLength={24} />
+								</label>
+								<label className="field">
+									Difficulty
+									<select value={soloLevel} onChange={(e) => setSoloLevel(e.target.value as 'S' | 'H')}>
+										<option value="S">Standard (life 30)</option>
+										<option value="H">Heroic (life 35)</option>
+									</select>
+								</label>
+								<label className="field">
+									Stage (starting threat)
+									<select value={stage} onChange={(e) => setStage(Number(e.target.value) as 1 | 2 | 3)}>
+										<option value={1}>Stage 1</option>
+										<option value={2}>Stage 2</option>
+										<option value={3}>Stage 3</option>
+									</select>
+								</label>
+							</div>
+						</div>
+					</div>
+					<button className="primary big" onClick={() => onStart({ decks: [deck0, 'viros'], names: [name0 || 'Player', 'The Corpse of Viros'], bot: true, level, tutorial: false, seed: seed(), solo: { level: soloLevel, stage } })}>
+						Face the chimera
 					</button>
 				</section>
 			)}

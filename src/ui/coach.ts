@@ -2,7 +2,7 @@
 // The suggestion comes from the computer opponent's own move picker, so it's always legal.
 
 import { bestPicks, chooseIntent } from '../bot/bot'
-import { ABILITIES } from '../engine/effects'
+import { abilitiesOf } from '../engine/engine'
 import { nameOf } from '../engine/engine'
 import type { GameState, Intent, PlayerId } from '../engine/types'
 
@@ -48,7 +48,7 @@ function describe(s: GameState, i: Intent): { what: string; hint: Hint } {
 		case 'play':
 			return { what: `play ${nameOf(s, i.card)}`, hint: { cards: [i.card], dice: i.dice } }
 		case 'activate':
-			return { what: `use ${nameOf(s, i.card)} (${ABILITIES[s.inst[i.card].stub]?.label ?? 'ability'})`, hint: { cards: [i.card], dice: i.dice } }
+			return { what: `use ${nameOf(s, i.card)} (${abilitiesOf(s, i.card)[i.ab ?? 0]?.label ?? 'ability'})`, hint: { cards: [i.card], dice: i.dice } }
 		case 'dicePower':
 			return { what: `use a dice power: put your power die on ${nameOf(s, i.target)}`, hint: { dice: [i.die], cards: [i.target] } }
 		case 'attack':

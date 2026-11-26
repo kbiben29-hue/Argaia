@@ -1,9 +1,10 @@
 // Every legal move in the current position (dice paid automatically with the cheapest dice).
 // Used by the computer opponent, the tutorial coach and the fuzz tests.
 
-import { ABILITIES } from './effects'
 import {
+	abilitiesOf,
 	abilityProblem,
+	POWER_NO_TARGET,
 	activeDice,
 	attackProblem,
 	canAttackWith,
@@ -32,23 +33,26 @@ export function legalIntents(s: GameState): Intent[] {
 		if (dice) out.push({ t: 'play', player: p, card: uid, dice })
 	}
 	const stacks = new Set<string>()
-	for (const uid of cardsInPlay(s, p)) {
+	for (const uid of [...cardsInPlay(s, p), ...units(s, other(p)).filter((u) => s.inst[u].ctl === p)]) {
 		const stub = s.inst[uid].stub
-		const ab = ABILITIES[stub]
-		if (!ab || abilityProblem(s, p, uid)) continue
-		if (s.inst[uid].zone === 'spellboard') {
-			if (stacks.has(stub)) continue
-			stacks.add(stub)
-		}
-		const dice = suggestDice(s, p, ab.cost)
-		if (dice) out.push({ t: 'activate', player: p, card: uid, dice })
+		abilitiesOf(s, uid).forEach((ab, k) => {
+			if (abilityProblem(s, p, uid, k)) return
+			if (s.inst[uid].zone === 'spellboard') {
+				if (stacks.has(`${stub}#${k}`)) return
+				stacks.add(`${stub}#${k}`)
+			}
+			const dice = suggestDice(s, p, ab.cost)
+			if (dice) out.push({ t: 'activate', player: p, card: uid, dice, ...(k ? { ab: k } : {}) })
+		})
 	}
 	if (!s.turn.side) {
 		const byMagic = new Set<string>()
 		for (const d of activeDice(s, p)) {
 			if (d.level !== 'power' || byMagic.has(d.magic)) continue
 			byMagic.add(d.magic)
-			for (const t of dicePowerTargets(s, p, d)) if (!dicePowerProblem(s, p, d.id, t)) out.push({ t: 'dicePower', player: p, die: d.id, target: t })
+			if (POWER_NO_TARGET.includes(d.magic)) {
+				if (!dicePowerProblem(s, p, d.id)) out.push({ t: 'dicePower', player: p, die: d.id })
+			} else for (const t of dicePowerTargets(s, p, d)) if (!dicePowerProblem(s, p, d.id, t)) out.push({ t: 'dicePower', player: p, die: d.id, target: t })
 		}
 	}
 	if (!s.turn.main) {

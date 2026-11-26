@@ -31,7 +31,7 @@ export function Card({ s, uid, w, onClick, onHover, onPointerDown, glow, selecte
 	const d = def(s, uid)
 	const h = Math.round(w * 1.4)
 	const unit = isUnit(s, uid)
-	const pb = d.type === 'Phoenixborn'
+	const pb = d.type === 'Phoenixborn' || d.type === 'Chimera'
 	const dice = diceOn(s, uid)
 	const ref = useRef<HTMLDivElement>(null)
 	const mounted = useRef(false)
@@ -105,6 +105,13 @@ export function Card({ s, uid, w, onClick, onHover, onPointerDown, glow, selecte
 						</div>
 					)}
 					{charge(s, uid) > 0 && unit && <div className="charged">charged</div>}
+					{c.status > 0 && <div className="tok status" title="Status tokens">◉{c.status}</div>}
+					{d.type === 'Aspect' && (
+						<div className="tok blood" title={`Blood ${d.blood} · attacks ${d.aim === 'jaw' ? 'your Phoenixborn' : `your ${d.aim}most unit`}`}>
+							🩸{d.blood} {d.aim === 'jaw' ? '◎' : d.aim === 'left' ? '◀' : '▶'}
+						</div>
+					)}
+					{(c.under?.length ?? 0) > 0 && <div className="tok under" title="An ally rides underneath">+{c.under!.length} rider</div>}
 					{chip && (
 						<button className={`ab-chip ${chip.glow ? 'glow' : ''}`} onClick={(e) => (e.stopPropagation(), chip.onClick())} onPointerDown={(e) => e.stopPropagation()}>
 							⚡ {chip.label}

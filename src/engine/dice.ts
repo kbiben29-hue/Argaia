@@ -8,6 +8,8 @@ import type { Die, Level, Magic } from './types'
 
 export interface Req {
 	magic?: Magic
+	/** "either" costs: any of these magic types (e.g. 1 natural class or 1 sympathy class) */
+	any?: Magic[]
 	level: Level
 }
 
@@ -17,14 +19,25 @@ export interface Cost {
 	exhaust: boolean
 	discard: number
 	magic: Req[]
+	/** "[[main]] or [[side]]": uses the side action when it's free, otherwise the main action */
+	mainOrSide?: boolean
 }
 
 export const RANK: Record<Level, number> = { power: 2, class: 1, basic: 0 }
 
 /** Parse printed cost pieces like "[[main]]", "1 [[astral:class]]", "1 [[discard]]". */
-export function parseCost(parts: string[] | undefined): Cost {
+export function parseCost(parts: (string | string[])[] | undefined): Cost {
 	const c: Cost = { main: false, side: false, exhaust: false, discard: 0, magic: [] }
 	for (const raw of parts ?? []) {
+		if (Array.isArray(raw)) {
+			const syms = raw.map((x) => x.trim().match(/^(\d+)?\s*\[\[([a-z:]+)\]\]$/)?.[2] ?? '')
+			if (syms.includes('main') && syms.includes('side')) c.mainOrSide = true
+			else {
+				const kinds = syms.map((x) => x.split(':') as [Magic, Level])
+				c.magic.push({ any: kinds.map((k) => k[0]), level: kinds[0][1] ?? 'basic' })
+			}
+			continue
+		}
 		const m = raw.trim().match(/^(\d+)?\s*\[\[([a-z:]+)\]\]$/)
 		if (!m) continue
 		const n = m[1] ? Number(m[1]) : 1
@@ -47,7 +60,7 @@ export function cost(...parts: string[]): Cost {
 	return parseCost(parts.map((p) => (p.includes('[[') ? p : `[[${p}]]`)))
 }
 
-export const canPay = (d: Die, r: Req) => (!r.magic || d.magic === r.magic) && RANK[d.level] >= RANK[r.level]
+export const canPay = (d: Die, r: Req) => d.magic !== 'rage' && (!r.magic || d.magic === r.magic) && (!r.any || r.any.includes(d.magic)) && RANK[d.level] >= RANK[r.level]
 
 /** True when exactly these dice can pay exactly these requirements. */
 export function paysExactly(dice: Die[], reqs: Req[]): boolean {
@@ -67,7 +80,7 @@ export function paysExactly(dice: Die[], reqs: Req[]): boolean {
 	return go(0)
 }
 
-const strictness = (r: Req) => (r.magic ? 10 : 0) + RANK[r.level]
+const strictness = (r: Req) => (r.magic ? 10 : r.any ? 8 : 0) + RANK[r.level]
 
 /**
  * The cheapest dice from `pool` (active dice) that pay `reqs`, or null if they can't be paid.
@@ -93,7 +106,7 @@ export function autoPay(pool: Die[], reqs: Req[]): Die[] | null {
 /** How much we'd rather keep a die: higher symbols and dice later requirements need are worth more. */
 function worth(d: Die, later: Req[]): number {
 	let w = RANK[d.level] * 3
-	if (later.some((r) => r.magic && canPay(d, r))) w += 2
+	if (later.some((r) => (r.magic || r.any) && canPay(d, r))) w += 2
 	return w
 }
 
@@ -115,8 +128,9 @@ export function costLabel(c: Cost): string {
 	const bits: string[] = []
 	if (c.main) bits.push('Main')
 	if (c.side) bits.push('Side')
+	if (c.mainOrSide) bits.push('Main or Side')
 	if (c.exhaust) bits.push('Exhaust')
-	for (const r of c.magic) bits.push(r.magic ? `${r.magic} ${r.level}` : 'basic')
+	for (const r of c.magic) bits.push(r.magic ? `${r.magic} ${r.level}` : r.any ? `${r.any.join(' or ')} ${r.level}` : 'basic')
 	if (c.discard) bits.push(`discard ${c.discard}`)
 	return bits.join(' · ') || 'Free'
 }

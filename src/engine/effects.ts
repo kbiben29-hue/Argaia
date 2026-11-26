@@ -1,8 +1,9 @@
-// Card abilities for the Ashes Ascendancy starter decks (Arren Frostpeak's astral deck and Issa
-// Brightmore's artifice deck). Scripts are keyed `${stub}:${trigger}`:
-//   play   – an action spell resolving        enter  – a unit coming into play
+// Card abilities. The two Ascendancy starter decks (Arren Frostpeak's astral deck and Issa
+// Brightmore's artifice deck) live here; the four Reborn precons are in precons.ts and the Red
+// Rains chimera in solo.ts. Scripts are keyed `${stub}:${trigger}`:
+//   play   – an action spell resolving        enter  – a unit (or ready spell) coming into play
 //   attach – an alteration spell attaching    ability – an activated ability (cost in ABILITIES)
-// Reactions (Dodge, Barrier) are offered through HOOKS at the moment their trigger happens.
+// Reactions are offered through HOOKS at the moment their trigger happens.
 // All descriptions here are our own wording; card text itself is never stored in this repo.
 
 import { cost, autoPay, type Cost } from './dice'
@@ -17,146 +18,34 @@ import {
 	controller,
 	dealDamage,
 	def,
+	diceOn,
 	discardFromHand,
 	drawCards,
 	exhausted,
-	exhaustedDice,
 	findDie,
+	isChimera,
 	lifeOf,
 	log,
-	lower,
 	moveDie,
 	nameOf,
 	pbHasAstral,
-	placeUnit,
 	units,
 	leavePlay,
 	type Ctx,
+	type Destroyed,
 	type Script,
 } from './engine'
 import { one, runCard } from './flows'
-import { LEVELS, other, type ChoiceOption, type Die, type GameState, type Level, type PlayerId } from './types'
+import { changeDice, changeOwnDice, conjure, damageFoeUnit, left, lowerFoeDice, mark, placeFromExhausted, placeScore, summonCheck, unitValue } from './helpers'
+import { PRECON_ABILITIES, PRECON_CHECKS, PRECON_KEYWORDS, PRECON_SCRIPTS, destroyedTriggers } from './precons'
+import { SOLO_SCRIPTS } from './solo'
+import { other, type ChoiceOption, type Die, type GameState, type PlayerId } from './types'
 
-// ───────── helpers ─────────
-
-/** Rough worth of a unit on the table (bot + coach scores). */
-export function unitValue(s: GameState, u: number): number {
-	return attackOf(s, u) * 1.5 + Math.max(0, lifeOf(s, u) - s.inst[u].wounds) + (exhausted(s, u) ? 0 : 0.5)
-}
-
-const dieLabel = (d: Die) => `${d.magic[0].toUpperCase()}${d.magic.slice(1)} die · ${d.level}`
-
-/** Choose a target unit an opponent controls to deal `amount` damage to. */
-function damageFoeUnit(c: Ctx, amount: number, prompt: string): number | null {
-	const s = c.s
-	const opts = units(s, c.rival).map((u) => {
-		const left = lifeOf(s, u) - s.inst[u].wounds
-		const prevented = astralOn(s, u) ? 1 : 0
-		const kills = amount - prevented >= left
-		return { id: String(u), label: `${nameOf(s, u)} (${left} life left)`, uid: u, score: (kills ? 10 + unitValue(s, u) : Math.min(amount, left) / Math.max(1, left)) }
-	})
-	const pick = one(c, c.owner, prompt, opts, 'target')
-	if (pick === null) return null
-	dealDamage(c, Number(pick), amount)
-	return Number(pick)
-}
-
-/** Lower `n` different dice in the opponent's active pool one level each. */
-function lowerFoeDice(c: Ctx, n: number) {
-	const s = c.s
-	const pool = activeDice(s, c.rival)
-	if (pool.length === 0) return
-	const k = Math.min(n, pool.length)
-	const picks = c.ask(c.owner, {
-		prompt: `Lower ${k} di${k > 1 ? 'ce' : 'e'} in ${s.players[c.rival].name}’s active pool one level (power → class → basic).`,
-		options: pool.map((d) => ({ id: d.id, label: dieLabel(d), dieId: d.id, score: d.level === 'power' ? 3 : d.level === 'class' ? 2 : 0 })),
-		min: k,
-		max: k,
-		kind: 'lowerDice',
-	})
-	for (const id of picks) {
-		const d = findDie(s, id)!
-		const from = d.level
-		lower(d)
-		log(s, from === 'basic' ? `${s.players[c.rival].name}’s ${d.magic} die is already basic.` : `${s.players[c.rival].name}’s ${d.magic} die goes from ${from} to ${d.level}.`)
-	}
-}
-
-/** Place a die of `magic` from the player's exhausted pool onto a card (astral: max one per card). */
-function placeFromExhausted(c: Ctx, p: PlayerId, magic: 'astral' | 'artifice', targets: number[], prompt: string, optional = false): number | null {
-	const s = c.s
-	const die = exhaustedDice(s, p).find((d) => d.magic === magic)
-	if (!die) {
-		log(s, `${s.players[p].name} has no exhausted ${magic} die to place.`)
-		return null
-	}
-	const ok = targets.filter((u) => magic !== 'astral' || !astralOn(s, u))
-	if (ok.length === 0) return null
-	const opts: ChoiceOption[] = ok.map((u) => ({ id: String(u), label: nameOf(s, u), uid: u, score: placeScore(s, u, magic) }))
-	if (optional) opts.unshift({ id: 'none', label: 'Don’t place one', score: -5 })
-	const pick = one(c, p, prompt, opts, 'placeDie')
-	if (pick === null || pick === 'none') return null
-	moveDie(die, 'card', Number(pick))
-	log(s, `${s.players[p].name} places an ${magic} die on ${nameOf(s, Number(pick))}.`)
-	return Number(pick)
-}
-
-function placeScore(s: GameState, u: number, magic: string): number {
-	const t = def(s, u).type
-	if (magic === 'astral') return t === 'Phoenixborn' ? 6 : unitValue(s, u)
-	// artifice: charge the cards that care most
-	const st = s.inst[u].stub
-	if (st === 'thunder-hulk') return charge(s, u) === 0 ? 9 : 2
-	if (st === 'supercharge' || st === 'summon-spark-drone') return charge(s, u) === 0 ? 7 : 1
-	if (t === 'Phoenixborn') return 4
-	if (t === 'Ally' || t === 'Conjuration') return 3 + unitValue(s, u) / 4
-	return 1
-}
-
-function conjure(c: Ctx, stub: string): number | null {
-	const s = c.s
-	const uid = conjAvailable(s, c.owner, stub)
-	if (uid === undefined) {
-		log(s, `No ${def(s, c.data.uid as number).name.replace('Summon ', '')} left in the conjuration pile.`)
-		return null
-	}
-	if (!placeUnit(s, c.owner, uid)) return null
-	log(s, `${nameOf(s, uid)} comes into play.`)
-	runCard(c, `${stub}:enter`, { uid })
-	return uid
-}
-
-const mark = (s: GameState, uid: number, amount: number) => s.marks.push({ kind: 'attack', uid, amount, until: 'turn' })
-
-function changeOwnDice(c: Ctx, n: number) {
-	const s = c.s
-	for (let k = 0; k < n; k++) {
-		const pool = activeDice(s, c.owner)
-		if (pool.length === 0) return
-		const pick = one(
-			c,
-			c.owner,
-			`Change a die in your active pool to a side of your choice (${k + 1} of ${n}).`,
-			[{ id: 'none', label: 'Leave the rest', score: -1 }, ...pool.map((d) => ({ id: d.id, label: dieLabel(d), dieId: d.id, score: d.level === 'basic' ? 3 : d.level === 'class' ? 2 : 0 }))],
-			'changeDie',
-		)
-		if (!pick || pick === 'none') return
-		const d = findDie(s, pick)!
-		const lv = one(
-			c,
-			c.owner,
-			'Which side?',
-			LEVELS.map((l) => ({ id: l, label: l, score: l === 'power' ? 3 : l === 'class' ? 2 : 0 })),
-			'dieSide',
-		) as Level
-		d.level = lv
-		log(s, `${s.players[c.owner].name} turns a ${d.magic} die to ${lv}.`)
-	}
-}
+export { unitValue }
 
 // ───────── scripts ─────────
 
-export const CARD_SCRIPTS: Record<string, Script> = {
+const STARTER_SCRIPTS: Record<string, Script> = {
 	// Phoenixborn
 	'arren-frostpeak:ability': (c) => {
 		damageFoeUnit(c, 1, 'Ascend: deal 1 damage to which opposing unit?')
@@ -249,7 +138,7 @@ export const CARD_SCRIPTS: Record<string, Script> = {
 		for (let k = 0; k < n; k++) {
 			if (units(s, c.rival).length === 0) break
 			damageFoeUnit(c, 1, `Brilliant Display (${k + 1} of ${n}): deal 1 damage to which opposing unit?`)
-			checkDestroyed(s)
+			checkDestroyed(s, c)
 		}
 	},
 	'core-supplier:enter': (c) => {
@@ -308,6 +197,8 @@ export const CARD_SCRIPTS: Record<string, Script> = {
 	},
 }
 
+export const CARD_SCRIPTS: Record<string, Script> = { ...STARTER_SCRIPTS, ...PRECON_SCRIPTS, ...SOLO_SCRIPTS }
+
 // ───────── activated abilities ─────────
 
 export interface Ability {
@@ -318,10 +209,7 @@ export interface Ability {
 	check?: (s: GameState, p: PlayerId, uid: number) => string | null
 }
 
-const summonCheck = (stub: string) => (s: GameState, p: PlayerId) =>
-	conjAvailable(s, p, stub) === undefined ? 'None left in your conjuration pile' : units(s, p).length >= Number(def(s, s.players[p].pb).battlefield) ? 'Your battlefield is full' : null
-
-export const ABILITIES: Record<string, Ability> = {
+const STARTER_ABILITIES: Record<string, Ability> = {
 	'arren-frostpeak': { label: 'Ascend', cost: cost('side', 'exhaust', 'astral:class'), help: '1 damage to an opposing unit, then an astral die onto Arren' },
 	'issa-brightmore': { label: 'Inspiration', cost: cost('side', 'exhaust', 'artifice:class'), help: 'Draw 2, then an artifice die onto a card you control' },
 	javelineer: { label: 'Frost Throw', cost: cost('main', 'exhaust'), help: 'Damage an opposing unit equal to this unit’s attack', check: (s, p) => (units(s, other(p)).length ? null : 'No opposing unit to hit') },
@@ -345,80 +233,154 @@ export const ABILITIES: Record<string, Ability> = {
 	'summon-thunder-hulk': { label: 'Summon Thunder Hulk', cost: cost('main', 'exhaust', 'artifice:class', 'basic'), help: 'Put a Thunder Hulk onto your battlefield', check: summonCheck('thunder-hulk') },
 }
 
-/** Keywords the engine checks directly. */
+/** Every activated ability; a card's second ability is keyed `${stub}#2`. */
+export const ABILITIES: Record<string, Ability> = { ...STARTER_ABILITIES, ...PRECON_ABILITIES }
+
+/** Keywords the engine checks directly ('name' or 'name:value'). Alterations listed here grant them to their unit. */
 export const KEYWORDS: Record<string, string[]> = {
 	'frost-talon': ['stalk'],
 	'spark-drone': ['unitGuard'],
-	'thunder-hulk': ['dormant', 'overkill'],
+	'thunder-hulk': ['dormant', 'overkill:1'],
+	'frozen-fear': ['terrifying:1'],
+	...PRECON_KEYWORDS,
 }
 
 /** Extra conditions for playing a card from hand. */
 export const PLAY_CHECKS: Record<string, (s: GameState, p: PlayerId, uid: number) => string | null> = {
 	retreat: (s, p) => (units(s, p).some((u) => def(s, u).type === 'Ally' && exhausted(s, u)) ? null : 'You need an exhausted ally to return'),
 	recharge: (s, p) => (cardsInPlay(s, p).some((u) => charge(s, u) > 0) ? null : 'You need a charged card (one with an artifice die)'),
+	...PRECON_CHECKS,
 }
 
 // ───────── reactions ─────────
 
-function canPayReaction(s: GameState, p: PlayerId, stub: string): { card: number; dice: Die[] } | null {
+/** Dice that may pay for a reaction: the active pool, plus power dice resting on Reimagine. */
+function reactionPool(s: GameState, p: PlayerId): Die[] {
+	const extra = s.players[p].spellboard
+		.flat()
+		.filter((u) => s.inst[u].stub === 'reimagine')
+		.flatMap((u) => diceOn(s, u))
+		.filter((d) => d.level === 'power' && (d.magic === 'time' || d.magic === 'illusion'))
+	return [...activeDice(s, p), ...extra]
+}
+
+export interface ReactionPay {
+	card: number
+	dice: Die[]
+}
+
+/** Can player `p` play reaction `stub` from hand now (one reaction per turn, and the dice)? */
+export function canPayReaction(s: GameState, p: PlayerId, stub: string): ReactionPay | null {
 	const pl = s.players[p]
-	if (pl.reacted || s.phase !== 'turns') return null
+	if (pl.reacted || isChimera(s, p) || s.phase === 'setup' || s.phase === 'over') return null
 	const card = pl.hand.find((u) => s.inst[u].stub === stub)
 	if (card === undefined) return null
-	const c = def(s, card).cost
-	const reqs = c?.map((x) => x) ?? []
-	const parsed = cost(...reqs)
-	const dice = autoPay(activeDice(s, p), parsed.magic)
+	const parsed = cost(...((def(s, card).cost ?? []).filter((x) => typeof x === 'string') as string[]))
+	const dice = autoPay(reactionPool(s, p), parsed.magic)
 	return dice ? { card, dice } : null
 }
 
-function payReaction(s: GameState, p: PlayerId, r: { card: number; dice: Die[] }) {
+export function payReaction(s: GameState, p: PlayerId, r: ReactionPay) {
 	for (const d of r.dice) moveDie(d, 'exhausted')
 	discardFromHand(s, r.card)
 	s.players[p].reacted = true
 	log(s, `${s.players[p].name} reacts with ${nameOf(s, r.card)}!`)
 }
 
+/** Ask whether to play a reaction. Returns the payment if the player said yes (already paid). */
+export function offerReaction(c: Ctx, p: PlayerId, stub: string, prompt: string, yesScore: number): ReactionPay | null {
+	const r = canPayReaction(c.s, p, stub)
+	if (!r) return null
+	const pick = one(
+		c,
+		p,
+		prompt,
+		[
+			{ id: 'no', label: 'Don’t react', score: 0 },
+			{ id: 'yes', label: `Play ${def(c.s, r.card).name}`, score: yesScore },
+		],
+		'reaction',
+	)
+	if (pick !== 'yes') return null
+	payReaction(c.s, p, r)
+	return r
+}
+
 export const HOOKS = {
-	/** Dodge: after an opponent declares attackers. */
-	attackersDeclared(c: Ctx, defender: PlayerId) {
+	/** After attackers are declared: the attacker's Void Pulse, then the defender's Dodge. */
+	attackersDeclared(c: Ctx, defender: PlayerId, attackers: number[] = (c.data.attackers as number[]) ?? []) {
 		const s = c.s
-		const r = canPayReaction(s, defender, 'dodge')
-		if (!r) return
+		const attacker = other(defender)
+		// Void Pulse (attacker): damage an opposing unit equal to the number of attackers
+		if (units(s, defender).length) {
+			const n = attackers.length
+			const best = Math.max(...units(s, defender).map((u) => (left(s, u) <= n ? unitValue(s, u) : 0)))
+			if (offerReaction(c, attacker, 'void-pulse', `Play Void Pulse? Deal ${n} damage to an opposing unit; if that destroys it, draw 2 and set 2 dice.`, best > 0 ? 3 : -1)) {
+				const cc = { ...c, owner: attacker, rival: defender }
+				const hit = damageFoeUnit(cc, n, `Void Pulse: deal ${n} damage to which opposing unit?`)
+				if (hit !== null && checkDestroyed(s, cc).includes(hit)) {
+					const k = drawCards(s, attacker, 2)
+					log(s, `Void Pulse: ${s.players[attacker].name} draws ${k}.`)
+					const who = one(cc, attacker, 'Void Pulse: change 2 dice in whose active pool?', [
+						{ id: 'me', label: 'My dice', score: 2 },
+						{ id: 'them', label: `${s.players[defender].name}’s dice`, score: 1 },
+					])
+					changeDice(cc, 2, who === 'them' ? defender : attacker)
+				}
+			}
+		}
+		// Dodge (defender)
 		const mine = units(s, defender).filter((u) => !astralOn(s, u))
 		if (mine.length === 0) return
-		const attackers = (c.data.attackers as number[]) ?? []
 		const threat = attackers.reduce((n, a) => n + attackOf(s, a), 0)
-		const pick = one(
-			c,
-			defender,
-			'Play Dodge? Put an astral die on one of your units; this turn your astral dice don’t exhaust when they prevent damage.',
-			[
-				{ id: 'no', label: 'Don’t react', score: 0 },
-				{ id: 'yes', label: 'Play Dodge', score: threat >= 3 ? 2 : -1 },
-			],
-			'reaction',
-		)
-		if (pick !== 'yes') return
-		payReaction(s, defender, r)
-		placeFromExhausted(c, defender, 'astral', mine, 'Dodge: place an astral die on which of your units?')
-		s.marks.push({ kind: 'dodge', player: defender, until: 'turn' })
+		if (offerReaction(c, defender, 'dodge', 'Play Dodge? Put an astral die on one of your units; this turn your astral dice don’t exhaust when they prevent damage.', threat >= 3 ? 2 : -1)) {
+			placeFromExhausted(c, defender, 'astral', mine, 'Dodge: place an astral die on which of your units?')
+			s.marks.push({ kind: 'dodge', player: defender, until: 'turn' })
+		}
 	},
-	/** Barrier: after a charged card you control is dealt damage. Returns damage prevented. */
+	/** After a guard is declared against `attacker`'s attack: Ensnare (2 damage to the guard). */
+	guardDeclared(c: Ctx, attacker: PlayerId, guard: number) {
+		const s = c.s
+		const isPb = def(s, guard).type === 'Phoenixborn'
+		const kills = !isPb && left(s, guard) <= 2
+		if (offerReaction(c, attacker, 'ensnare', `Play Ensnare? Deal 2 damage to ${nameOf(s, guard)}, the guard.`, kills ? 4 : isPb ? 1.5 : 0.5)) {
+			dealDamage({ ...c, owner: attacker, rival: other(attacker) }, guard, 2)
+		}
+	},
+	/** Redirect: when your Phoenixborn is about to be dealt damage, a unit of yours takes it instead. */
+	redirect(c: Ctx, target: number, amount: number): number {
+		const s = c.s
+		const t = s.inst[target]
+		if (t.zone !== 'pb') return target
+		const p = t.owner
+		if (units(s, p).length === 0 || !canPayReaction(s, p, 'redirect')) return target
+		const pbLeftNow = Number(def(s, target).life) - t.wounds
+		if (!offerReaction(c, p, 'redirect', `${nameOf(s, target)} is about to take ${amount} damage. Play Redirect so a unit of yours takes it instead?`, amount >= pbLeftNow ? 9 : amount >= 2 ? 1.5 : -1)) return target
+		const opts = units(s, p).map((u) => ({ id: String(u), label: `${nameOf(s, u)} (${left(s, u)} life left)`, uid: u, score: -unitValue(s, u) + (left(s, u) > amount ? 3 : 0) }))
+		const pick = one(c, p, 'Redirect: which of your units takes the damage?', opts, 'target')
+		if (pick === null) return target
+		log(s, `${nameOf(s, Number(pick))} takes the damage instead.`)
+		return Number(pick)
+	},
+	/** Preventing reactions as damage is dealt: Barrier (charged card), Bravery (your unit). Returns damage prevented. */
 	damaged(c: Ctx, target: number, amount: number): number {
 		const s = c.s
-		if (charge(s, target) === 0) return 0
 		const p = controller(s, target)
+		const isUnitTarget = s.inst[target].zone === 'battlefield'
+		const lethal = isUnitTarget && amount >= left(s, target)
+		if (isUnitTarget && canPayReaction(s, p, 'bravery')) {
+			if (offerReaction(c, p, 'bravery', `${nameOf(s, target)} is about to take ${amount} damage. Play Bravery to prevent all of it?`, lethal ? 3 + unitValue(s, target) / 3 : -1)) return amount
+		}
+		if (charge(s, target) === 0) return 0
 		const r = canPayReaction(s, p, 'barrier')
 		if (!r) return 0
-		const left = def(s, target).type === 'Phoenixborn' ? 99 : lifeOf(s, target) - s.inst[target].wounds
 		const pick = one(
 			c,
 			p,
 			`${nameOf(s, target)} is about to take ${amount} damage. Play Barrier to prevent 3 of it?`,
 			[
 				{ id: 'no', label: 'Don’t react', score: 0 },
-				{ id: 'yes', label: 'Play Barrier', score: amount >= left ? 4 : amount >= 2 ? 1 : -1 },
+				{ id: 'yes', label: 'Play Barrier', score: lethal || !isUnitTarget ? (amount >= 2 ? 4 : 1) : amount >= 2 ? 1 : -1 },
 			],
 			'reaction',
 		)
@@ -426,4 +388,9 @@ export const HOOKS = {
 		payReaction(s, p, r)
 		return 3
 	},
+	/** Units just destroyed: their own "when destroyed" effects, then everyone's triggers and reactions. */
+	destroyed(c: Ctx, list: Destroyed[]) {
+		destroyedTriggers(c, list)
+	},
 }
+

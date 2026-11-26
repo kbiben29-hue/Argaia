@@ -3,7 +3,9 @@
 Argaia is an unofficial browser implementation of **Ashes** (Ashes Reborn / Ascendancy, Plaid Hat Games):
 a pure TypeScript rules engine, a React UI, hot-seat play, a computer opponent, online play with a friend
 and a tutorial coach. It is a sibling of Afterlife (kbiben29-hue/Afterlife-) and Holodeck and follows the
-same ideas. Currently: the two Ashes Ascendancy starter decks (Arren Frostpeak, Issa Brightmore).
+same ideas. Decks: the two Ascendancy starters (Arren astral, Issa artifice) and four Reborn precons
+(Jessa ceremonial+charm, Harold ceremonial+sympathy, Xander natural+divine, Hope illusion+time), plus
+Red Rains solo mode against The Corpse of Viros (deck id `viros`).
 
 ## Commands
 
@@ -22,6 +24,14 @@ npm run build        # vite build (base './')
   the task runner and the damage pipeline (`dealDamage` → Barrier hook → astral die → wounds → defeat).
 - `src/engine/flows.ts` — the game's own task scripts: setup (First Five), prepare (roll → first player →
   discard/draw/fatigue), recovery (heal/exhaustion/dice → re-roll choice → end of round), play, ability, attack.
+- `src/engine/helpers.ts` — shared script helpers (targets, damage, dice changes, conjure, Keepsake's `touchDice`).
+- `src/engine/precons.ts` — the four precon decks: `PRECON_SCRIPTS/ABILITIES/KEYWORDS/CHECKS`, `attackTriggers`,
+  `afterFight` (Life Drain, Overkill…), `endOfRound` (Cursed, Fleeting), `destroyedTriggers` (all "when destroyed"
+  effects and destroyed reactions). Second abilities are keyed `${stub}#2` (`abilitiesOf`, intent `ab`).
+- `src/engine/solo.ts` — Red Rains: setup, `chimeraTurn` (d12 behaviour table by phase), rage dice, Red Rains
+  tokens/ultimate, chimera blocks/guards (Defender, d12 ≥ 9), recovery steps. The chimera is player 1
+  (`state.solo`); its questions are auto-answered by score in `runTask`. Aspects bleed the chimera in `sendTo`.
+- `src/data/preconCards.ts` (generated from ashes-cards precons.json), `src/data/chimeraCards.ts`.
 - `src/engine/effects.ts` — every starter card: `CARD_SCRIPTS` keyed `${stub}:play|enter|attach|ability`,
   `ABILITIES` (cost + our own one-line help), `KEYWORDS` (stalk, unitGuard, dormant, overkill),
   `PLAY_CHECKS`, `HOOKS` for the two reactions (Dodge after attackers are declared, Barrier when a charged card is dealt damage).
@@ -76,9 +86,9 @@ Pages source "GitHub Actions") → Tauri apps (`Argaia-Mac.dmg`, `Argaia-Windows
 
 ## Next steps
 
-1. More decks: add numbers to `starterCards.ts` (or a new data file), scripts to `effects.ts`, a decklist to `decks.ts`
-   (precon lists: ashes.live / Ashteki's `data/decks/precon-*.json`). Natural Magic expansion (Garden of Brilliance,
-   Shaper of Storms) is the natural next pair.
-2. The Dragonborn (solo PvE boss from the starter set).
+1. More decks: numbers in a data file (ashes-cards `data/precons.json` has full precon lists), scripts in a
+   precons-style module, a decklist in `decks.ts`. Deck lessons/drills exist only for Arren and Issa.
+2. Red Rains: the chimera's other aspect set ("Shadow": Lurk, Glare, Dark Descent, Constrict, Stormcall,
+   Regenerate) and more chimeras; the Dragonborn (solo boss from the Ascendancy starter set).
 3. A stronger bot (Issa is weaker in bot-vs-bot games: it doesn't plan charging).
 4. Deck builder.

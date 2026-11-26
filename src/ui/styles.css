@@ -655,7 +655,21 @@ input {
 .die.mg-divine { color: #b58a2b; background: #f2f2f2; }
 .die.mg-sympathy { color: #e3c2af; background: #119981; }
 .die.mg-time { color: #dfdfdf; background: #9a2e36; }
+.die.mg-rage { color: #e41d1d; background: #f1daa6; }
 .die.mg-any { color: #20252f; background: #fff; }
+.die .g.plain,
+.phg .die .g.plain {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	font-family: system-ui, sans-serif;
+	font-weight: 700;
+	font-size: 0.85em;
+	line-height: 1;
+}
+.die.mg-rage .fb {
+	display: none;
+}
 .die.lv-power {
 	box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.55), 0 0 9px rgba(255, 246, 210, 0.6);
 }
@@ -1786,4 +1800,160 @@ input {
 	.float-viewer .view {
 		flex-direction: column;
 	}
+}
+
+/* ───────── Red Rains ───────── */
+.solo-panel {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	padding: 6px 8px;
+	border-radius: 8px;
+	background: linear-gradient(180deg, rgba(120, 22, 28, 0.55), rgba(40, 10, 14, 0.6));
+	border: 1px solid rgba(228, 29, 29, 0.45);
+	color: var(--text);
+	font-size: 12px;
+	min-width: 150px;
+}
+.solo-panel.compact {
+	min-width: 0;
+	padding: 3px 6px;
+	font-size: 11px;
+}
+.rr-row {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+}
+.rr-label {
+	font-family: Cinzel, serif;
+	letter-spacing: 0.04em;
+	margin-right: 2px;
+}
+.rr-token {
+	width: 12px;
+	height: 12px;
+	border-radius: 50%;
+	border: 1px solid #e41d1d;
+	background: transparent;
+}
+.rr-token.on {
+	background: radial-gradient(circle at 35% 35%, #ff6a5a, #9e1010);
+	box-shadow: 0 0 6px rgba(228, 29, 29, 0.8);
+}
+.rr-n {
+	margin-left: 2px;
+	color: var(--dim);
+}
+.rr-meta {
+	display: flex;
+	gap: 8px;
+	color: var(--dim);
+}
+.rr-meta .phase {
+	color: #ffb4a8;
+	font-weight: 700;
+}
+.rr-meta .fatigued {
+	color: var(--gold2);
+}
+.rr-roll {
+	font-size: 11px;
+	line-height: 1.3;
+	max-width: 230px;
+}
+.rr-roll .d12 {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 20px;
+	height: 20px;
+	border-radius: 4px;
+	background: #f1daa6;
+	color: #9e1010;
+	font-weight: 800;
+	margin-right: 4px;
+}
+.threat-row {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding-right: 10px;
+	margin-right: 4px;
+	border-right: 1px dashed rgba(228, 29, 29, 0.45);
+	flex: none;
+}
+.threat-blood {
+	position: absolute;
+	left: 50%;
+	top: 50%;
+	transform: translate(-50%, -50%);
+	color: #fff;
+	font-weight: 800;
+	font-size: 13px;
+	text-shadow: 0 1px 3px #000;
+}
+.threat-label {
+	font-family: Cinzel, serif;
+	font-size: 11px;
+	color: #ffb4a8;
+	writing-mode: vertical-rl;
+	transform: rotate(180deg);
+}
+.threat-card {
+	flex: none;
+	position: relative;
+	background: repeating-linear-gradient(45deg, #4a1419, #4a1419 6px, #3a1014 6px, #3a1014 12px);
+	border: 2px solid #8a2a2f;
+	border-radius: 6px;
+	overflow: hidden;
+	box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+	background: #3a1216;
+}
+.threat-card img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	display: block;
+}
+.threat-card.next {
+	outline: 2px solid rgba(228, 29, 29, 0.7);
+}
+.viros-row {
+	display: flex;
+	gap: 16px;
+	align-items: flex-start;
+	flex-wrap: wrap;
+}
+
+.tok.status {
+	border-radius: 8px;
+	padding: 1px 5px;
+	left: 4px;
+	bottom: 26%;
+	background: #2c6e7a;
+	color: #fff;
+}
+.tok.blood {
+	border-radius: 8px;
+	padding: 1px 5px;
+	right: 4px;
+	top: 4px;
+	left: auto;
+	background: rgba(120, 10, 16, 0.85);
+	color: #fff;
+	font-size: 10px;
+}
+.tok.under {
+	border-radius: 8px;
+	padding: 1px 5px;
+	left: 4px;
+	top: 30%;
+	background: rgba(32, 37, 47, 0.85);
+	color: var(--gold2);
+	font-size: 10px;
+}
+.viros-row > div {
+	flex: 1;
+	min-width: 280px;
 }

@@ -14,8 +14,11 @@ export interface CardText {
 
 let table: Record<string, CardText> = {}
 
-export const imageUrl = (stub: string) => `${BASE}/images/${stub}.jpg`
-export const cardText = (stub: string): CardText | undefined => table[stub]
+import { ASPECT_HELP } from './chimeraCards'
+
+const IMAGE_ALIAS: Record<string, string> = { 'corpse-of-viros': 'corpse-of-viros-1p-standard-1' }
+export const imageUrl = (stub: string) => `${BASE}/images/${IMAGE_ALIAS[stub] ?? stub}.jpg`
+export const cardText = (stub: string): CardText | undefined => table[stub] ?? (ASPECT_HELP[stub] ? { stub, name: stub, type: 'Aspect', text: ASPECT_HELP[stub] } : undefined)
 
 export async function loadCardText(): Promise<void> {
 	try {

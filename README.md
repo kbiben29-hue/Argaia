@@ -6,10 +6,27 @@
 
 Every push to `main` rebuilds all three (`.github/workflows/release.yml`); the links always point at the newest build.
 
-Argaia lets you play **Ashes** (Ashes Reborn / Ashes Ascendancy, by Plaid Hat Games) in a web browser,
-starting with the two *Ashes Ascendancy* starter decks: **Arren Frostpeak** (The Sentinels of Skies, astral
-dice) and **Issa Brightmore** (The Spark of Invention, artifice dice). It's a fan project with no official
-standing.
+Argaia lets you play **Ashes** (Ashes Reborn / Ashes Ascendancy, by Plaid Hat Games) in a web browser.
+It's a fan project with no official standing. Six decks cover all nine magic types:
+
+| Phoenixborn | Deck | Dice |
+|---|---|---|
+| Arren Frostpeak | The Sentinels of Skies (Ascendancy starter) | astral |
+| Issa Brightmore | The Spark of Invention (Ascendancy starter) | artifice |
+| Jessa Na Ni | The Bloodwoods Queen | ceremonial + charm |
+| Harold Westraven | The Demons of Darmas | ceremonial + sympathy |
+| Xander Heartsblood | The King of Titans | natural + divine |
+| Hope Everthorn | The Artist of Dreams | illusion + time |
+
+The four Reborn decks are official preconstructed decks. They were chosen as the most-built Phoenixborn on
+[ashes.live](https://ashes.live) (public decks per Phoenixborn) that, between them, cover the seven magic
+types the starters don't.
+
+- **Red Rains: The Corpse of Viros** — the first chimera, as a solo game (Standard or Heroic, stage 1–3).
+  The chimera plays itself from its behaviour table: it reveals face-down aspects, attacks, raises rage dice,
+  gathers Red Rains tokens and unleashes its ultimate, moving through three phases. Destroying an aspect
+  wounds it by the aspect's blood value. (This uses the "Fury" aspects: Rampage, Hunting Instincts,
+  Firebelly, Iron Scales, Frozen Fear and Whiplash.)
 
 - **Vs computer** — Easy, Normal or Expert (looks at your best reply before it moves).
 - **Two players** on one device (the hand is hidden while you pass it over).
@@ -18,7 +35,7 @@ standing.
   - **Tutorial: practice game** — a real game against the computer with a coach that explains each step
     (First Five, dice and costs, main and side actions, attacking, blocking, guarding, reactions, recovery)
     and makes the suggested card, die or button glow.
-  - **Deck lessons & combos** — for Arren and for Issa: a guide to the deck's game plan, then a coached game
+  - **Deck lessons & combos** — for Arren and for Issa (the starter decks): a guide to the deck's game plan, then a coached game
     where the coach points out combos as they come up, plus combo drills: set positions with a goal
     ("win this turn"), coached step by step, with a debrief when you solve them.
 
@@ -64,11 +81,17 @@ prepare-phase discards and fatigue, main and side actions, dice costs (power pay
 class pays basic), parallel play of ready spells and stacking, conjuration piles, battlefield and
 spellboard limits, attacks on a Phoenixborn (blocks) or a unit (guards, Phoenixborn guard once a round,
 Unit Guard, counters), simultaneous battle damage, wounds and destruction, exhaustion, reactions (one per
-player per turn), the recovery phase and the first player token. Every card in both starter decks has its
-abilities automated, including astral dice preventing damage, charged cards, Dodge, Barrier, Stalk,
-Dormant and Overkill.
+player per turn), the recovery phase and the first player token. Every card in all six decks has its
+abilities automated, and all nine dice powers work (astral, artifice, natural, illusion, ceremonial, charm,
+divine, sympathy, time). That includes keywords like Stalk, Terrifying, Gigantic, Transform, Group Tactics,
+Overkill, Life Drain and Armored; mounts with riders; Blood Puppets on the opponent's side; Hunter's Mark;
+Law of Domination; reactions such as Dodge, Barrier, Final Cry, Redirect, Consume Soul, Double Down,
+Ensnare and Void Pulse; and Jessa's Screams of the Departed.
 
 ## Where the cards come from
+
+The Red Rains rules come from the published Red Rains rules as implemented by the open-source
+[Ashteki](https://github.com/ashteki/ashteki) client (reference only; no code was copied).
 
 Card text and pictures are loaded while you play from
 [kbiben29-hue/ashes-cards](https://github.com/kbiben29-hue/ashes-cards) (downloaded there from the fan site
@@ -83,7 +106,8 @@ On a Mac, double-click **Start Argaia.command** (needs [Node.js](https://nodejs.
 npm install
 npm run dev        # http://localhost:5173
 npm test           # rules tests + random-game fuzz test
-npm run sim -- 50  # computer-vs-computer games
+npm run sim -- 20  # computer-vs-computer games, every deck pairing (+ vs the chimera)
+npm run sim -- 20 jessa viros   # one pairing
 npm run build      # static site in dist/
 ```
 

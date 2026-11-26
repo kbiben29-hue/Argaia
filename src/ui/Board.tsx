@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState, type PointerEvent as RPointerEvent, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import {
+	abilitiesOf,
 	abilityProblem,
+	POWER_NO_TARGET,
+	isChimera,
 	activeDice,
 	attackProblem,
 	canAttackWith,
@@ -22,7 +25,7 @@ import {
 	battlefieldSize,
 	spellboardSize,
 } from '../engine/engine'
-import { ABILITIES } from '../engine/effects'
+import { SoloPanel, ThreatRow } from './Solo'
 import { paysExactly, type Req } from '../engine/dice'
 import { other, LEVELS, type AttackTarget, type GameState, type Intent, type Level, type ManualOp, type MeditateItem, type PlayerId, type Question } from '../engine/types'
 import { cardText } from '../data/cardText'
@@ -35,7 +38,7 @@ export type LayoutChoice = 'auto' | LayoutKind
 
 type Mode =
 	| null
-	| { k: 'pay'; what: 'play' | 'activate'; card: number; dice: string[]; reqs: Req[] }
+	| { k: 'pay'; what: 'play' | 'activate'; card: number; dice: string[]; reqs: Req[]; ab?: number }
 	| { k: 'attack'; target: AttackTarget | null; attackers: number[] }
 	| { k: 'power'; die: string }
 	| { k: 'med'; items: MeditateItem[]; src: { from: 'hand' | 'deck' | 'spell'; card?: number } | null }
@@ -153,14 +156,15 @@ export function Board(props: BoardProps) {
 	}
 
 	// ───── starting actions ─────
-	const startPay = (what: 'play' | 'activate', card: number) => {
-		const why = what === 'play' ? playProblem(s, me, card) : abilityProblem(s, me, card)
+	const startPay = (what: 'play' | 'activate', card: number, ab = 0) => {
+		const why = what === 'play' ? playProblem(s, me, card) : abilityProblem(s, me, card, ab)
 		if (why) return flash(why)
-		const c = what === 'play' ? playCost(s, card) : ABILITIES[s.inst[card].stub].cost
+		const c = what === 'play' ? playCost(s, card) : abilitiesOf(s, card)[ab].cost
 		const dice = suggestDice(s, me, c)
-		if (c.magic.length === 0) return go({ t: what, player: me, card, dice: [] })
+		const extra = what === 'activate' && ab ? { ab } : {}
+		if (c.magic.length === 0) return go({ t: what, player: me, card, dice: [], ...extra })
 		if (!dice) return flash('You don’t have the right dice for that')
-		setMode({ k: 'pay', what, card, dice, reqs: c.magic })
+		setMode({ k: 'pay', what, card, dice, reqs: c.magic, ...extra })
 		setSel(null)
 	}
 	const startAttack = (target: AttackTarget | null, attacker?: number) => {
@@ -223,8 +227,13 @@ export function Board(props: BoardProps) {
 			return
 		}
 		if (myAct && d.owner === me && d.loc === 'active' && d.level === 'power') {
-			const err = dicePowerProblem(s, me, id)
-			if (err) return flash(err)
+			if (POWER_NO_TARGET.includes(d.magic)) {
+				const err = dicePowerProblem(s, me, id)
+				if (err) return flash(err)
+				go({ t: 'dicePower', player: me, die: id })
+				return
+			}
+			if (dicePowerTargets(s, me, d).length === 0) return flash(dicePowerProblem(s, me, id, -1) ?? 'No target for this dice power')
 			setMode({ k: 'power', die: id })
 			setSel(null)
 			return
@@ -258,6 +267,13 @@ export function Board(props: BoardProps) {
 				flash('Add more attackers if you like, then press Attack!')
 			} else if (s.inst[target].zone === 'battlefield') attackNow(target, [d.id as number])
 		} else if (d.kind === 'die') {
+			const die = findDie(s, d.id as string)
+			if (die && POWER_NO_TARGET.includes(die.magic)) {
+				const err = dicePowerProblem(s, me, die.id)
+				if (err) return flash(err)
+				go({ t: 'dicePower', player: me, die: die.id })
+				return
+			}
 			if (target === null) return
 			const err = dicePowerProblem(s, me, d.id as string, target)
 			if (err) return flash(err)
@@ -327,9 +343,10 @@ export function Board(props: BoardProps) {
 	/** Ability button on one of my cards, when its ability can be used right now. */
 	const chipFor = (uid: number) => {
 		if (!myAct || mode !== null || controller(s, uid) !== me) return undefined
-		const ab = ABILITIES[s.inst[uid].stub]
-		if (!ab || abilityProblem(s, me, uid) || !suggestDice(s, me, ab.cost)) return undefined
-		return { label: ab.label.replace(/^Summon /, ''), onClick: () => startPay('activate', uid), glow: hintCards.has(uid) }
+		const k = abilitiesOf(s, uid).findIndex((ab, i) => !abilityProblem(s, me, uid, i) && suggestDice(s, me, ab.cost))
+		if (k < 0) return undefined
+		const ab = abilitiesOf(s, uid)[k]
+		return { label: ab.label.replace(/^Summon /, ''), onClick: () => startPay('activate', uid, k), glow: hintCards.has(uid) }
 	}
 	const cardProps = (uid: number, opts: { drag?: Drag['kind']; chip?: boolean } = {}) => ({
 		s,
@@ -411,13 +428,16 @@ export function Board(props: BoardProps) {
 		const pl = s.players[p]
 		return (
 			<div className={`battlefield ${p === me ? 'mine' : 'theirs'}`}>
+				{isChimera(s, p) && <ThreatRow s={s} w={w} />}
 				{pl.battlefield.map((u) => (
 					<Card key={u} {...cardProps(u, { drag: p === me ? 'unit' : undefined, chip: p === me })} w={w} />
 				))}
-				{pl.battlefield.length === 0 && <div className="bf-empty">{p === me ? 'Your battlefield' : `${pl.name}’s battlefield`}</div>}
-				<div className="bf-count">
-					{pl.battlefield.length}/{battlefieldSize(s, p)}
-				</div>
+				{pl.battlefield.length === 0 && !(isChimera(s, p) && s.solo!.threatZone.length) && <div className="bf-empty">{p === me ? 'Your battlefield' : `${pl.name}’s battlefield`}</div>}
+				{!isChimera(s, p) && (
+					<div className="bf-count">
+						{pl.battlefield.length}/{battlefieldSize(s, p)}
+					</div>
+				)}
 			</div>
 		)
 	}
@@ -471,7 +491,7 @@ export function Board(props: BoardProps) {
 						</span>
 					</div>
 					<div className="counts">
-						<span title="Cards in hand">✋ {pl.hand.length}</span>
+						{!isChimera(s, p) && <span title="Cards in hand">✋ {pl.hand.length}</span>}
 						{!W && (
 							<>
 								<span title="Draw pile">▤ {pl.deck.length}</span>
@@ -531,7 +551,7 @@ export function Board(props: BoardProps) {
 			</>
 		)
 		buttons.push(btn('cancel', 'Cancel', () => setMode(null)))
-		buttons.push(btn('confirm', 'Confirm', () => go({ t: mode.what, player: me, card: mode.card, dice: mode.dice }), { primary: true, disabled: !ok }))
+		buttons.push(btn('confirm', 'Confirm', () => go(mode.what === 'activate' ? { t: 'activate', player: me, card: mode.card, dice: mode.dice, ...(mode.ab ? { ab: mode.ab } : {}) } : { t: 'play', player: me, card: mode.card, dice: mode.dice }), { primary: true, disabled: !ok }))
 	} else if (mode?.k === 'attack') {
 		const err = mode.target === null ? 'pick' : attackProblem(s, me, mode.target, mode.attackers)
 		barText =
@@ -552,7 +572,15 @@ export function Board(props: BoardProps) {
 		buttons.push(btn('attack', 'Attack!', () => mode.target !== null && attackNow(mode.target, mode.attackers), { primary: true, disabled: !!err }))
 	} else if (mode?.k === 'power') {
 		const d = findDie(s, mode.die)
-		barText = <>Dice power: tap the card to put this {d?.magic} die on{d?.magic === 'astral' ? ' — it prevents 1 damage' : ' — it charges that card'}.</>
+		const what: Record<string, string> = {
+			astral: 'tap the card to put this astral die on — it prevents 1 damage',
+			artifice: 'tap the card to put this artifice die on — it charges that card',
+			natural: 'tap a unit to deal 1 damage to it',
+			charm: 'tap an opposing unit to put this charm die on — it gets −1 attack',
+			divine: 'tap one of your units to put this divine die on — it gets +1 attack',
+			time: 'tap one of your units to give it a status token (then you may remove one)',
+		}
+		barText = <>Dice power: {what[d?.magic ?? ''] ?? 'tap a card'}.</>
 		buttons.push(btn('cancel', 'Cancel', () => setMode(null)))
 	} else if (mode?.k === 'med') {
 		barText = mode.src ? <>Now tap a die in your active pool to choose its new side.</> : <>Meditate: tap a card in your hand, a ready spell, or Top of deck — each discard sets one die to any side.</>
@@ -714,6 +742,7 @@ export function Board(props: BoardProps) {
 				<div className="p-foe">
 					<div className="p-foebar">
 						{pbBlock(foe, true)}
+						{s.solo && <SoloPanel s={s} compact />}
 						<button className="p-menu" onClick={(e) => (e.stopPropagation(), setSheet('menu'))}>
 							☰
 						</button>
@@ -768,6 +797,7 @@ export function Board(props: BoardProps) {
 				<div className="mat foe">
 					{pbBlock(foe)}
 					{diceTray(foe)}
+					{s.solo && <SoloPanel s={s} />}
 					{spellboard(foe, sz.foeSpell)}
 					{piles(foe, sz.pile - 8)}
 				</div>
@@ -815,7 +845,7 @@ interface ViewerProps {
 	uid: number
 	me: PlayerId
 	myAct: boolean
-	startPay: (w: 'play' | 'activate', c: number) => void
+	startPay: (w: 'play' | 'activate', c: number, ab?: number) => void
 	startAttack: (t: AttackTarget | null, a?: number) => void
 	hideHand: boolean
 	manual: boolean
@@ -847,21 +877,21 @@ function Viewer({ s, uid, me, myAct, startPay, startAttack, hideHand, manual, on
 		})
 	}
 	if (c.zone === 'hand' && d.type === 'Reaction Spell') actions.push({ key: 'react', label: 'Reaction spell', why: 'You’ll be asked when its moment comes', run: () => {} })
-	const ab = ABILITIES[c.stub]
-	if (ab && inPlay(s, uid) && controller(s, uid) === me) {
-		const why = abilityProblem(s, me, uid) ?? (suggestDice(s, me, ab.cost) ? null : 'You don’t have the right dice')
-		actions.push({
-			key: 'ab',
-			label: (
-				<>
-					{ab.label} <CostView cost={ab.cost} />
-				</>
-			),
-			why: myAct ? why : 'Not your turn',
-			run: () => startPay('activate', uid),
-			primary: true,
+	if (inPlay(s, uid) && controller(s, uid) === me)
+		abilitiesOf(s, uid).forEach((ab, k) => {
+			const why = abilityProblem(s, me, uid, k) ?? (suggestDice(s, me, ab.cost) ? null : 'You don’t have the right dice')
+			actions.push({
+				key: `ab${k}`,
+				label: (
+					<>
+						{ab.label} <CostView cost={ab.cost} />
+					</>
+				),
+				why: myAct ? why : 'Not your turn',
+				run: () => startPay('activate', uid, k),
+				primary: true,
+			})
 		})
-	}
 	if (myAct && !s.turn.main && c.zone === 'battlefield' && controller(s, uid) === me && canAttackWith(s, uid)) actions.push({ key: 'atk', label: 'Attack with this unit', run: () => startAttack(null, uid) })
 	if (myAct && !s.turn.main && controller(s, uid) === foe && (c.zone === 'battlefield' || c.zone === 'pb')) actions.push({ key: 'atkme', label: `Attack ${c.zone === 'pb' ? 'this Phoenixborn' : 'this unit'}`, run: () => startAttack(c.zone === 'pb' ? 'pb' : uid) })
 	const dice = diceOn(s, uid)
@@ -917,7 +947,11 @@ function Viewer({ s, uid, me, myAct, startPay, startAttack, hideHand, manual, on
 						)}
 					</div>
 				)}
-				{ab && <div className="view-help">{ab.help}</div>}
+				{abilitiesOf(s, uid).map((ab, k) => (
+					<div key={k} className="view-help">
+						<b>{ab.label}:</b> {ab.help}
+					</div>
+				))}
 				<div className="view-actions">
 					{actions.map((a) => (
 						<button key={a.key} className={a.primary && !a.why ? 'primary' : ''} disabled={!!a.why} onClick={a.run} title={a.why ?? ''}>

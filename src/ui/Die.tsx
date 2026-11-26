@@ -30,6 +30,7 @@ const FALLBACK: Record<string, string> = {
 	divine: '☀',
 	sympathy: '❂',
 	time: '⧗',
+	rage: '✹',
 }
 
 let fontPromise: Promise<void> | null = null
@@ -57,7 +58,7 @@ export function DieChip({ die, size = 34, onClick, glow, selected, dim }: { die:
 	const cls = ['die', `mg-${die.magic}`, `lv-${die.level}`, glow ? 'glow' : '', selected ? 'sel' : '', dim ? 'dim' : '', onClick ? 'tap' : ''].join(' ')
 	return (
 		<span className={cls} style={{ width: size, height: size, fontSize: size * 0.74 }} onClick={onClick ? (e) => (e.stopPropagation(), onClick()) : undefined} title={`${die.magic} · ${die.level}`}>
-			<span className="g">{glyphFor(die.magic, die.level)}</span>
+			{die.magic === 'rage' ? <span className="g plain">{die.level === 'power' ? '✹' : '·'}</span> : <span className="g">{glyphFor(die.magic, die.level)}</span>}
 			<span className="fb">{die.level === 'basic' ? <i className="dot" /> : <span className="ic">{FALLBACK[die.magic] ?? '?'}</span>}</span>
 		</span>
 	)
