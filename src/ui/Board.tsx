@@ -26,6 +26,7 @@ import {
 	spellboardSize,
 } from '../engine/engine'
 import { SoloPanel, ThreatRow } from './Solo'
+import { Reference } from './Reference'
 import { paysExactly, type Req } from '../engine/dice'
 import { other, LEVELS, type AttackTarget, type GameState, type Intent, type Level, type ManualOp, type MeditateItem, type PlayerId, type Question } from '../engine/types'
 import { cardText } from '../data/cardText'
@@ -82,7 +83,7 @@ export function Board(props: BoardProps) {
 	const [toast, setToast] = useState<string | null>(null)
 	const [qHidden, setQHidden] = useState(false)
 	const [facePick, setFacePick] = useState<string | null>(null)
-	const [sheet, setSheet] = useState<'menu' | null>(null)
+	const [sheet, setSheet] = useState<'menu' | 'ref' | null>(null)
 	const [pile, setPile] = useState<{ p: PlayerId; which: 'discard' | 'conj' } | null>(null)
 	const [banner, setBanner] = useState<{ text: string; key: number } | null>(null)
 	const [drag, setDrag] = useState<Drag | null>(null)
@@ -743,9 +744,14 @@ export function Board(props: BoardProps) {
 					<div className="p-foebar">
 						{pbBlock(foe, true)}
 						{s.solo && <SoloPanel s={s} compact />}
-						<button className="p-menu" onClick={(e) => (e.stopPropagation(), setSheet('menu'))}>
-							☰
-						</button>
+						<div className="p-menus">
+							<button className="p-menu" title="Abilities at a glance" onClick={(e) => (e.stopPropagation(), setSheet('ref'))}>
+								📜
+							</button>
+							<button className="p-menu" onClick={(e) => (e.stopPropagation(), setSheet('menu'))}>
+								☰
+							</button>
+						</div>
 					</div>
 					{s.players[foe].spellboard.length > 0 && <div className="p-row">{spellboard(foe, sz.foeSpell)}</div>}
 					<div className="p-row">{battlefield(foe, sz.foeUnit)}</div>
@@ -784,6 +790,16 @@ export function Board(props: BoardProps) {
 						</div>
 					</div>
 				)}
+				{sheet === 'ref' && (
+					<div className="sheet" onClick={(e) => (e.stopPropagation(), setSheet(null))}>
+						<div className="sheet-body" onClick={(e) => e.stopPropagation()}>
+							<button className="sheet-x" onClick={() => setSheet(null)}>
+								✕
+							</button>
+							<Reference s={s} me={me} compact onView={(u) => (setSheet(null), setSel(u))} />
+						</div>
+					</div>
+				)}
 				{pileBrowser}
 				{facePicker}
 				{bannerEl}
@@ -818,7 +834,7 @@ export function Board(props: BoardProps) {
 				{props.netBadge}
 				{promptBar}
 				{props.coach}
-				<div className="viewer">{viewerContent ?? <div className="viewer-empty">Tap or point at any card to see it here.</div>}</div>
+				<div className="viewer">{viewerContent ?? <Reference s={s} me={me} onView={setSel} />}</div>
 				{logBox}
 			</div>
 			{pileBrowser}

@@ -70,6 +70,8 @@ iPads, and above your hand on phones.
 - **Drag and drop** (mouse or finger): drag a card from your hand up onto the table to play it, drag one of
   your units onto an enemy unit to attack it (an arrow follows you) or onto their Phoenixborn to start an
   attack, and drag a power die onto a card to use its dice power.
+- **Abilities at a glance**: the side column (📜 button on phones) shows the Phoenixborn cards with their
+  abilities and, in Red Rains, the chimera's behaviour table and ultimate for its current phase.
 - **Ability buttons** (⚡) appear right on your cards when their ability can be used.
 - **Piles**: each side shows its draw pile, discard pile (top card showing) and conjuration pile — tap the
   discard or conjuration pile to look through it.
